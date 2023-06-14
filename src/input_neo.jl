@@ -244,7 +244,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     dens_1 = ions[1].density ./ 1e6
     n1 = dens_1[gridpoint_cp]
 
-    dens_e = cp1d.electrons.density_thermal ./ 1e6
+    dens_e = cp1d.electrons.density ./ 1e6
     dlnnedr = -IMAS.calc_z(rmin ./ a, dens_e)
     ne = dens_e[gridpoint_cp]
     dlnnedr = dlnnedr[gridpoint_cp] 
@@ -253,8 +253,6 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     dlntedr = -IMAS.calc_z(rmin ./ a, temp_e)
     Te = temp_e[gridpoint_cp]
     dlntedr = dlntedr[gridpoint_cp]
-
-
 
     n_norm = ne
     m_norm = 3.3452e-27 * 1e3
@@ -266,8 +264,8 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     pressure = cp1d.pressure
     
-    bunit = IMAS.bunit(eqt)[gridpoint_eq]
-    dpdr = IMAS.gradient(rmin, pressure)[gridpoint_eq] # does this need to be converted to some other units? 
+    # bunit = IMAS.bunit(eqt)[gridpoint_eq]
+    # dpdr = IMAS.gradient(rmin, pressure)[gridpoint_eq] # only used when ANISO_MODEL = 2
 
     input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_eq]
 
@@ -327,7 +325,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
         Ti = Ti[gridpoint_cp]
         dlntidr = dlntidr[gridpoint_cp]
 
-        ni = ions[iion].density_thermal ./ 1e6 / n_norm
+        ni = ions[iion].density ./ 1e6 / n_norm
         dlnnidr = -IMAS.calc_z(rmin ./ a, ni)
         ni = ni[gridpoint_cp]
         dlnnidr = dlnnidr[gridpoint_cp]
@@ -364,7 +362,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     input_neo.N_SPECIES = length(ions) + 1 # add 1 to include electrons
 
     # setting sign conventions
-    input_neo.BTCCW = 1
+    input_neo.BTCCW = -1
     input_neo.IPCCW = 1
 
     return input_neo
