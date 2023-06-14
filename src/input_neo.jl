@@ -225,18 +225,47 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     eqt = eq.time_slice[]
     eq1d = eqt.profiles_1d
     cp1d = dd.core_profiles.profiles_1d[1]
+    ions = cp1d.ion
    
-
-    mp = IMAS.constants.m_p * 1E3 # g
+    mp = IMAS.constants.m_p * 1e3 # g
+    # mp = 1.00727647 #amu
     # me = IMAS.gacode_units.me
     m_to_cm = IMAS.gacode_units.m_to_cm
+
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    a = rmin[end]
 
     e = IMAS.gacode_units.e # statcoul
     k = IMAS.gacode_units.k # erg/eV
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    temp_1 = ions[1].temperature ./ 1e3
+    T1 = temp_1[gridpoint_cp]
 
-    a = rmin[end]
+    dens_1 = ions[1].density ./ 1e6
+    n1 = dens_1[gridpoint_cp]
+
+    dens_e = cp1d.electrons.density_thermal .* 1e-6
+    dlnnedr = -IMAS.calc_z(rmin, dens_e)
+    ne = dens_e[gridpoint_cp]
+    dlnnedr = dlnnedr[gridpoint_cp] 
+
+    temp_e = cp1d.electrons.temperature ./ 1e3
+    dlntedr = -IMAS.calc_z(rmin, temp_e)
+    Te = temp_e[gridpoint_cp]
+    dlntedr = dlntedr[gridpoint_cp]
+
+    # me = 5.4858e-4 #amu
+    me = IMAS.constants.m_e * 1e3
+
+
+    n_norm = ne
+    # m_norm = 2.014 #amu  
+    m_norm = 3.3452e-27 * 1e3
+    t_norm = Te
+    # print(Te)
+    v_norm = sqrt(t_norm/m_norm)
+    println("vnorm", v_norm)
+
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
 
@@ -247,30 +276,21 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_eq]
 
-    dens_e = cp1d.electrons.density_thermal .* 1e-6
-    dlnnedr = -IMAS.calc_z(rmin, dens_e)
-    ne = dens_e[gridpoint_cp]
-    dlnnedr = dlnnedr[gridpoint_cp] 
-
-    temp_e = cp1d.electrons.temperature
-    dlntedr = -IMAS.calc_z(rmin, temp_e)
-    Te = temp_e[gridpoint_cp]
-    dlntedr = dlntedr[gridpoint_cp]
-
-    me = 5.4858e-4 #amu
-
-    ions = cp1d.ion
 
     kappa = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.elongation).(cp1d.grid.rho_tor_norm)
     input_neo.KAPPA = kappa[gridpoint_cp]
 
-    # T1 = ions[1].temperature
-    # n1 = ions[1].density / 1E6
-    # Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
-    # m1 = ions[1].element[1].a * mp
-    # nu1 = @. sqrt(2) * pi * n1 * Z1 * e^4.0 * loglam / (sqrt(m1) * (k * T1)^1.5)
+    loglam = 24.0 .- log.(sqrt.(ne) ./ (Te))
+    Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
+    m1 = ions[1].element[1].a * mp
+    nu1 = @. sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / sqrt(m1) / (k*temp_1)^1.5
 
-    ##############
+    v_norm = sqrt(t_norm./m_norm)
+
+    println("nu1 = ", (nu1/(v_norm/a))[gridpoint_cp])
+    input_neo.NU_1 = nu1[gridpoint_cp] / (v_norm / a)
+
+    ####################
     
 
     q_profile = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
@@ -305,20 +325,6 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     # sZ0 = IMAS.gradient(rmin, Z0)
     # input_neo.S_ZMAG = sZ0[gridpoint_eq] #this doesn't work bc Z0 is a scalar
 
-    # n_norm is the normalizing density, dens of species 1
-
-    n_norm = ne
-    m_norm = 2.014 #amu  
-    t_norm = Te
-    print(Te)
-    v_norm = sqrt(t_norm/m_norm)
-
-    loglam = 24.0 .- log.(sqrt.(ne / n_norm) ./ (Te / t_norm))
-    nu1 = @. sqrt(2) * pi * (dens_e / n_norm) * (-1)^4.0 * e^4.0 * loglam / sqrt(me / m_norm) / (k *(temp_e /t_norm))^1.5
-    nu1 = nu1 / (v_norm / a)
-    # print(nu1)
-
-    input_neo.NU_1 = nu1[gridpoint_cp]
 
     setfield!(input_neo, Symbol("ANISO_MODEL_1"), 1)
     setfield!(input_neo, Symbol("MASS_1"), me / m_norm)
