@@ -262,11 +262,6 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
 
-    pressure = cp1d.pressure
-    
-    # bunit = IMAS.bunit(eqt)[gridpoint_eq]
-    # dpdr = IMAS.gradient(rmin, pressure)[gridpoint_eq] # only used when ANISO_MODEL = 2
-
     input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_eq]
 
     kappa = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.elongation).(cp1d.grid.rho_tor_norm)
@@ -307,12 +302,12 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     input_neo.SHEAR = rmin[gridpoint_cp] / q * dqdr
 
     drmaj = IMAS.gradient(rmin, Rmaj)
-    input_neo.SHIFT = -drmaj[gridpoint_cp]
+    input_neo.SHIFT = drmaj[gridpoint_cp]
 
-    # Z0 = eqt.global_quantities.magnetic_axis.z
-    # input_neo.ZMAG_OVER_A = Z0 / a
-    # sZ0 = IMAS.gradient(rmin, Z0)
-    # input_neo.S_ZMAG = sZ0[gridpoint_eq] #this doesn't work bc Z0 is a scalar
+    Z0 = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.geometric_axis.z * 1e2).(cp1d.grid.rho_tor_norm)
+    input_neo.ZMAG_OVER_A = Z0[gridpoint_cp] / a  
+    sZ0 = IMAS.gradient(rmin, Z0)
+    input_neo.S_ZMAG = sZ0[gridpoint_cp] 
 
     for iion in eachindex(ions)
         species = iion
@@ -337,10 +332,8 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     end
 
     for i in range(1,11)
-        # density = Symbol("DENS_$i")
         density_val = getfield(input_neo, Symbol("DENS_$i"))
         if ismissing(density_val)
-            println("density $i missing")
             setfield!(input_neo, Symbol("DENS_$i"), ne / n_norm)
             setfield!(input_neo, Symbol("TEMP_$i"), Te / t_norm)
             setfield!(input_neo, Symbol("ANISO_MODEL_$i"), 1)
