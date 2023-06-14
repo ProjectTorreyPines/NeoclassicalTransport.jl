@@ -244,13 +244,13 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     dens_1 = ions[1].density ./ 1e6
     n1 = dens_1[gridpoint_cp]
 
-    dens_e = cp1d.electrons.density_thermal .* 1e-6
-    dlnnedr = -IMAS.calc_z(rmin, dens_e)
+    dens_e = cp1d.electrons.density_thermal ./ 1e6
+    dlnnedr = -IMAS.calc_z(rmin ./ a, dens_e)
     ne = dens_e[gridpoint_cp]
     dlnnedr = dlnnedr[gridpoint_cp] 
 
     temp_e = cp1d.electrons.temperature ./ 1e3
-    dlntedr = -IMAS.calc_z(rmin, temp_e)
+    dlntedr = -IMAS.calc_z(rmin ./ a, temp_e)
     Te = temp_e[gridpoint_cp]
     dlntedr = dlntedr[gridpoint_cp]
 
@@ -287,8 +287,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     v_norm = sqrt(t_norm./m_norm)
 
-    println("nu1 = ", (nu1/(v_norm/a))[gridpoint_cp])
-    input_neo.NU_1 = nu1[gridpoint_cp] / (v_norm / a)
+    input_neo.NU_1 = (nu1/ (v_norm ./ a))[gridpoint_cp] 
 
     ####################
     
@@ -326,27 +325,27 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     # input_neo.S_ZMAG = sZ0[gridpoint_eq] #this doesn't work bc Z0 is a scalar
 
 
-    setfield!(input_neo, Symbol("ANISO_MODEL_1"), 1)
-    setfield!(input_neo, Symbol("MASS_1"), me / m_norm)
-    setfield!(input_neo, Symbol("Z_1"), -1)
-    setfield!(input_neo, Symbol("TEMP_1"), Te / t_norm)
-    setfield!(input_neo, Symbol("DENS_1"), ne / n_norm)
-    setfield!(input_neo, Symbol("DLNNDR_1"), dlnnedr)
-    setfield!(input_neo, Symbol("DLNTDR_1"), dlntedr)
+    # setfield!(input_neo, Symbol("ANISO_MODEL_1"), 1)
+    # setfield!(input_neo, Symbol("MASS_1"), me / m_norm)
+    # setfield!(input_neo, Symbol("Z_1"), -1)
+    # setfield!(input_neo, Symbol("TEMP_1"), Te / t_norm)
+    # setfield!(input_neo, Symbol("DENS_1"), ne / n_norm)
+    # setfield!(input_neo, Symbol("DLNNDR_1"), dlnnedr)
+    # setfield!(input_neo, Symbol("DLNTDR_1"), dlntedr)
 
     for iion in eachindex(ions)
-        species = iion + 1
+        species = iion
         setfield!(input_neo, Symbol("ANISO_MODEL_$species"), 1)
         setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a / m_norm)
         setfield!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
 
-        Ti = ions[iion].temperature / t_norm
-        dlntidr = -IMAS.calc_z(rmin, Ti)
+        Ti = ions[iion].temperature ./ 1e3 ./ t_norm
+        dlntidr = -IMAS.calc_z(rmin ./ a, Ti)
         Ti = Ti[gridpoint_cp]
         dlntidr = dlntidr[gridpoint_cp]
 
-        ni = ions[iion].density_thermal .* 1e-6 / n_norm
-        dlnnidr = -IMAS.calc_z(rmin, ni)
+        ni = ions[iion].density_thermal ./ 1e6 / n_norm
+        dlnnidr = -IMAS.calc_z(rmin ./ a, ni)
         ni = ni[gridpoint_cp]
         dlnnidr = dlnnidr[gridpoint_cp]
 
@@ -354,6 +353,22 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
         setfield!(input_neo, Symbol("DENS_$species"), ni)
         setfield!(input_neo, Symbol("DLNNDR_$species"), dlnnidr)
         setfield!(input_neo, Symbol("DLNTDR_$species"), dlntidr)
+    end
+
+    for i in range(1,11)
+        # density = Symbol("DENS_$i")
+        density_val = getfield(input_neo, Symbol("DENS_$i"))
+        if ismissing(density_val)
+            println("density $i missing")
+            setfield!(input_neo, Symbol("DENS_$i"), ne / n_norm)
+            setfield!(input_neo, Symbol("TEMP_$i"), Te / t_norm)
+            setfield!(input_neo, Symbol("ANISO_MODEL_$i"), 1)
+            setfield!(input_neo, Symbol("MASS_$i"), me / m_norm)
+            setfield!(input_neo, Symbol("Z_$i"), -1)
+            setfield!(input_neo, Symbol("DLNNDR_$i"), dlnnedr)
+            setfield!(input_neo, Symbol("DLNTDR_$i"), dlntedr)
+            break
+        end
     end
 
     # fix to PROFILE_MODEL 1, N_RADIAL must always be 1
