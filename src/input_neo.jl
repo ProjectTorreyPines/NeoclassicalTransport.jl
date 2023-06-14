@@ -228,8 +228,8 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     ions = cp1d.ion
    
     mp = IMAS.constants.m_p * 1e3 # g
-    # mp = 1.00727647 #amu
-    # me = IMAS.gacode_units.me
+    me = IMAS.constants.m_e * 1e3
+
     m_to_cm = IMAS.gacode_units.m_to_cm
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
@@ -254,17 +254,12 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     Te = temp_e[gridpoint_cp]
     dlntedr = dlntedr[gridpoint_cp]
 
-    # me = 5.4858e-4 #amu
-    me = IMAS.constants.m_e * 1e3
 
 
     n_norm = ne
-    # m_norm = 2.014 #amu  
     m_norm = 3.3452e-27 * 1e3
     t_norm = Te
-    # print(Te)
-    v_norm = sqrt(t_norm/m_norm)
-    println("vnorm", v_norm)
+    v_norm = sqrt(t_norm./m_norm)
 
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
@@ -276,7 +271,6 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_eq]
 
-
     kappa = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.elongation).(cp1d.grid.rho_tor_norm)
     input_neo.KAPPA = kappa[gridpoint_cp]
 
@@ -284,8 +278,6 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
     m1 = ions[1].element[1].a * mp
     nu1 = @. sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / sqrt(m1) / (k*temp_1)^1.5
-
-    v_norm = sqrt(t_norm./m_norm)
 
     input_neo.NU_1 = (nu1/ (v_norm ./ a))[gridpoint_cp] 
 
@@ -324,19 +316,10 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     # sZ0 = IMAS.gradient(rmin, Z0)
     # input_neo.S_ZMAG = sZ0[gridpoint_eq] #this doesn't work bc Z0 is a scalar
 
-
-    # setfield!(input_neo, Symbol("ANISO_MODEL_1"), 1)
-    # setfield!(input_neo, Symbol("MASS_1"), me / m_norm)
-    # setfield!(input_neo, Symbol("Z_1"), -1)
-    # setfield!(input_neo, Symbol("TEMP_1"), Te / t_norm)
-    # setfield!(input_neo, Symbol("DENS_1"), ne / n_norm)
-    # setfield!(input_neo, Symbol("DLNNDR_1"), dlnnedr)
-    # setfield!(input_neo, Symbol("DLNTDR_1"), dlntedr)
-
     for iion in eachindex(ions)
         species = iion
         setfield!(input_neo, Symbol("ANISO_MODEL_$species"), 1)
-        setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a / m_norm)
+        setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a .* mp / m_norm)
         setfield!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
 
         Ti = ions[iion].temperature ./ 1e3 ./ t_norm
