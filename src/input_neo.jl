@@ -224,7 +224,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     eq = dd.equilibrium
     eqt = eq.time_slice[]
     eq1d = eqt.profiles_1d
-    cp1d = dd.core_profiles.profiles_1d[1]
+    cp1d = dd.core_profiles.profiles_1d[]
     ions = cp1d.ion
    
     mp = IMAS.constants.m_p * 1e3 # g
@@ -255,7 +255,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     dlntedr = dlntedr[gridpoint_cp]
 
     n_norm = ne
-    m_norm = 3.3452e-27 * 1e3
+    m_norm = 3.3452e-27 * 1e3 # mass of deuterium in grams
     t_norm = Te
     v_norm = sqrt(t_norm./m_norm)
 
@@ -385,8 +385,7 @@ function save_inputneo(input_neo::InputNEO, filename::String)
 end
 
 function run_neo(input_neo::InputNEO)
-    # folder = mktempdir()
-    folder = ("/Users/Ghiozzi/.julia/dev/NEO/test")
+    folder = mktempdir()
 
     save_inputneo(input_neo, joinpath(folder, "input.neo"))
 
@@ -399,5 +398,35 @@ function run_neo(input_neo::InputNEO)
     end
 
     run(Cmd(`bash command.sh`, dir=folder)) 
+
+    ### parse outputs ###
+    fluxes = Float64[]
+
+    tmp = open(joinpath(folder, "out.neo.transport_flux"), "r") do io
+        for line in eachline(io)
+            if !startswith(line, "#")
+                for word in split(line)
+                    val = tryparse(Float64, word)
+                    if val !== nothing 
+                        push!(fluxes, val)
+                    end    
+                end
+            end
+        end
+    end
+
+    loc_first_tgyro = (4 * input_neo.N_SPECIES * 2) + 1
+    tgyro_fluxes = fluxes[loc_first_tgyro:end]
+
+    flux_solution = NEO.flux_solution()
+
+    for i in range(0, input_neo.N_SPECIES - 1)
+        species = i + 1
+        setfield!(flux_solution, Symbol("PARTICLE_FLUX_$species"), tgyro_fluxes[2+(i*4)])
+        setfield!(flux_solution, Symbol("ENERGY_FLUX_$species"), tgyro_fluxes[3+(i*4)])
+        setfield!(flux_solution, Symbol("MOMENTUM_FLUX_$species"), tgyro_fluxes[4+(i*4)])
+    end
+
+    return(flux_solution)
 
 end
