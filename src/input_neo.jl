@@ -286,7 +286,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
 
     q_profile = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
     q = q_profile[gridpoint_cp]
-    input_neo.Q = q
+    input_neo.Q = abs(q)
 
     input_neo.RHO_STAR = IMAS.rho_s(cp1d, eqt)[gridpoint_cp] / a
 
