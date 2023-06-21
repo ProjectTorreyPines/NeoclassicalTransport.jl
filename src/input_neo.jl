@@ -218,7 +218,7 @@ Base.@kwdef mutable struct InputNEO
     THREED_EXB_MODEL::Union{Int,Missing} = missing
 end
 
-function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
+function InputNEO(dd::IMAS.dd, gridpoint_cp)
     input_neo = InputNEO()
 
     eq = dd.equilibrium
@@ -262,7 +262,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
 
-    input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_eq]
+    input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_cp]
 
     kappa = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.elongation).(cp1d.grid.rho_tor_norm)
     input_neo.KAPPA = kappa[gridpoint_cp]
@@ -273,6 +273,13 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
     nu1 = @. sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / sqrt(m1) / (k*temp_1)^1.5
 
     input_neo.NU_1 = (nu1/ (v_norm ./ a))[gridpoint_cp] 
+
+    c_s = IMAS.c_s(cp1d) ./ 1e3
+    w0 = -c_s .* cp1d.rotation_frequency_tor_sonic
+    w0p = IMAS.gradient(rmin, w0)
+
+    input_neo.OMEGA_ROT = w0[gridpoint_cp] / (v_norm / a)
+    input_neo.OMEGA_ROT_DERIV = w0p[gridpoint_cp] * a^2 / v_norm
 
     ####################
     
@@ -351,6 +358,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_eq, gridpoint_cp)
 
     input_neo.THREED_MODEL = 0
     input_neo.EQUILIBRIUM_MODEL = 2
+    input_neo.ROTATION_MODEL = 2
 
     input_neo.N_SPECIES = length(ions) + 1 # add 1 to include electrons
 
