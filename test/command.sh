@@ -1,1 +1,0 @@
-neo -e &> command.log
