@@ -47,10 +47,10 @@ Base.@kwdef mutable struct flux_solution
 end
 
 include("input_neo.jl")
+include("hirshman_sigmar.jl")
 
 function run_neo(input_neo::InputNEO)
 	folder = mktempdir()
-
 	save_inputneo(input_neo, joinpath(folder, "input.neo"))
 
 	open(joinpath(folder, "command.sh"), "w") do io
@@ -95,4 +95,4 @@ function run_neo(input_neo::InputNEO)
 
 end
 
-end # module NEO
+end
