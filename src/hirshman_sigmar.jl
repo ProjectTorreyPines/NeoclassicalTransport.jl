@@ -107,7 +107,6 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
 				p3 = p2
 				p2 = p1
 				p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
-                # println("The value of p1 is:", p1)
             end
 
 			# p1 is the Legendre polynomial. Now compute its derivative, pp.
@@ -242,15 +241,18 @@ function compute_HS(ir, dd::IMAS.dd)
     rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
 
-
     rho = cp1d.grid.rho_tor_norm
     q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
+
+    bunit = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
+    b_field_average = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.b_field_average).(cp1d.grid.rho_tor_norm)
+    Bmag2_avg = (b_field_average ./ bunit).^2
 
     global ir_global = ir 
 
 	Nx = 100
 	integ_order = 8
-	omega_fac = 1.0 / Bmag2_avg
+	omega_fac = 1.0 / Bmag2_avg[ir]
 	HS_I_div_psip = rmaj[ir] * q[ir] / rmin[ir] 
 
 	nux0 = zeros(Float64, n_species)
@@ -307,7 +309,7 @@ function compute_HS(ir, dd::IMAS.dd)
 			else
 				L11 = L_a * (Z[is_global] * temp[:,js][ir]) / (Z[js] * temp[:,is_global][ir]) * mass[js] * dens[:,js][ir] * nux0[js] / sum_nm
 				L12 = (nux2[js] / nux0[js]) * L11
-				L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (Z[is_global] * dens[:,is_global][ir] * nux0[is_global] / sum_nm) * L_b
+				L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[:,is_global][ir] * nux0[is_global] / sum_nm) * L_b
 				L22 = (nux2[is_global] / nux0[is_global]) * L12
 
 			end
