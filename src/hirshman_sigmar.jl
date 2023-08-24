@@ -25,7 +25,6 @@ function build_parameter_matrices(dd::IMAS.dd)
 	Z = Vector{Float64}(undef, num_ions+1)
 	mass = Vector{Float64}(undef, num_ions+1)
 
-
     dens = zeros(Float64, length(cp1d.ion[1].density), num_ions+1)
 	temp = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
     vth = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
@@ -48,9 +47,7 @@ function build_parameter_matrices(dd::IMAS.dd)
 		dlnndr[:,i] = -IMAS.calc_z(rmin / a , cp1d.ion[i].density)
 		dlntdr[:,i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature)
 
-
-
-        vth[:,i] = sqrt.(cp1d.ion[i].temperature ./ 1e3 ./ cp1d.ion[i].element[1].a)
+        vth[:,i] = sqrt.((cp1d.ion[i].temperature ./ 1e3 ./ t_norm) ./ (cp1d.ion[i].element[1].a ./ m_norm))
 	end
 
     # tacking on electron parameters at the end 
@@ -64,7 +61,7 @@ function build_parameter_matrices(dd::IMAS.dd)
     dlnndr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density_thermal)
     dlntdr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature) # this might still be wrong
 
-    vth[:,end] = sqrt.(cp1d.electrons.temperature ./ 1e3 ./ 0.00054858)
+    vth[:,end] = sqrt.((cp1d.electrons.temperature ./ 1e3 ./ t_norm) ./ (0.00054858 ./ m_norm))
 
     return Z, mass, dens, temp, nu, dlnndr, dlntdr, vth
 end
@@ -250,7 +247,7 @@ function compute_HS(ir, dd::IMAS.dd)
 
     global ir_global = ir 
 
-	Nx = 100
+	Nx = 10 # Can be lowered to speed up calculation time
 	integ_order = 8
 	omega_fac = 1.0 / Bmag2_avg[ir]
 	HS_I_div_psip = rmaj[ir] * q[ir] / rmin[ir] 
