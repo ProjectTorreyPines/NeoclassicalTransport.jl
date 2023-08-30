@@ -11,16 +11,17 @@ function build_parameter_matrices(dd::IMAS.dd)
 
 	num_ions = length(cp1d.ion)
 
-    e = 4.8e-10
-    k = 1.6e-12
+    e = IMAS.gacode_units.e # statcoul
+    k = IMAS.gacode_units.k # erg/eV
+    mp = IMAS.constants.m_p * 1e3 # g
    
-	loglam = 24.0 .- log.(sqrt.((cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature ./ 1e3)))
-
+	loglam = 24.0 .- log.(sqrt.(cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature))
+    
     n_norm = cp1d.electrons.density ./ 1e6 
-    t_norm = cp1d.electrons.temperature ./ 1e3
+    t_norm = cp1d.electrons.temperature
 
     m_norm = 2.014102 # mass of deuterium in atomic mass units
-    nu_norm = sqrt.(t_norm ./ m_norm) ./ a
+    nu_norm = sqrt.(k .* cp1d.electrons.temperature ./ (3.3452e-27 * 1e3)) ./ a
 
 	Z = Vector{Float64}(undef, num_ions+1)
 	mass = Vector{Float64}(undef, num_ions+1)
@@ -29,8 +30,6 @@ function build_parameter_matrices(dd::IMAS.dd)
 	temp = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
     vth = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
     nu = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
-
-
     dlnndr = zeros(Float64, length(cp1d.ion[1].density), num_ions+1)
     dlntdr = zeros(Float64, length(cp1d.ion[1].temperature), num_ions+1)
 
@@ -39,11 +38,10 @@ function build_parameter_matrices(dd::IMAS.dd)
 		mass[i] = cp1d.ion[i].element[1].a ./ m_norm
 
 		dens[:,i] = cp1d.ion[i].density ./ 1e6 ./ n_norm
-		temp[:,i] = cp1d.ion[i].temperature ./ 1e3 ./ t_norm
+		temp[:,i] = cp1d.ion[i].temperature ./ t_norm
 
-		nu[:,i] = (@. sqrt(2) * pi * dens[:,i] * Z[i]^4.0 * e^4.0 * loglam / sqrt(1.6726e-24 .* mass[i]) / (k * temp[:,i])^1.5) ./ nu_norm
+        nu[:,i] = (@. sqrt(2) * pi * (cp1d.ion[i].density ./ 1e6) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
 
-		# gradients - these are finally actually right so don't change anything
 		dlnndr[:,i] = -IMAS.calc_z(rmin / a , cp1d.ion[i].density)
 		dlntdr[:,i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature)
 
@@ -54,12 +52,12 @@ function build_parameter_matrices(dd::IMAS.dd)
     Z[end] = -1.0
     mass[end] = 0.00054858 / m_norm # 0.00054858 is the mass of an electron in AMU
     dens[:,end] = cp1d.electrons.density ./ 1e6 ./ n_norm 
-    temp[:,end] = cp1d.electrons.temperature ./ 1e3 ./ t_norm
+    temp[:,end] = cp1d.electrons.temperature ./ t_norm
 
-    nu[:,end] = (@. sqrt(2) * pi * dens[:,end] * Z[end]^4.0 * e^4.0 * loglam / sqrt(1.6726e-24 .* mass[end]) / (k .* temp[:,end])^1.5) ./ nu_norm
+    nu[:,end] = (@. sqrt(2) * pi * (cp1d.electrons.density ./ 1e6) * (Z[end]* e)^4.0 * loglam / sqrt(0.00054858 * mp) / (k .* cp1d.electrons.temperature)^1.5) ./ nu_norm
 
-    dlnndr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density_thermal)
-    dlntdr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature) # this might still be wrong
+    dlnndr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density)
+    dlntdr[:,end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature) 
 
     vth[:,end] = sqrt.((cp1d.electrons.temperature ./ 1e3 ./ t_norm) ./ (0.00054858 ./ m_norm))
 
@@ -151,18 +149,25 @@ end
 function get_coll_freqs(ir_loc, is_loc, js_loc, ene, dd::IMAS.dd)
     Z, mass, dens, temp, nu, dlnndr, dlntdr, vth = NEO.build_parameter_matrices(dd)
     
-    fac = (1.0 * Z[js_loc]^2 / (1.0 * Z[is_loc])^2 * dens[:,js_loc][ir_loc]) / dens[:,is_loc][ir_loc]
+    fac = (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[:,js_loc][ir_loc] / dens[:,is_loc][ir_loc])
+    # println("fac = ", fac)
 
 	xa = sqrt(ene)
+    # println("xa = ", xa)
     xb = xa * (vth[:,is_loc][ir_loc]/vth[:,js_loc][ir_loc])
+    # println("vth = ", vth[:,is_loc][ir_loc])
+    # println("xb = ", xb)
 
     if xb < 1e-4 
         nu_d = fac * (1.0/sqrt(pi)) * (4.0/3.0 * (vth[:,is_loc][ir_loc]/vth[:,js_loc][ir_loc]) - 4.0/15.0  * (vth[:,is_loc][ir_loc]/vth[:,js_loc][ir_loc])^3 * ene + 2.0/35.0  * (vth[:,is_loc][ir_loc]/vth[:,js_loc][ir_loc])^5 * ene^2 - 2.0/189.0 * (vth[:,is_loc][ir_loc]/vth[:,js_loc][ir_loc])^7 * ene^3)
-
+        # println("nu_d xb less than 1e-4 = ", nu_d)
     else
         Hd_coll = exp(-xb * xb) / (xb * sqrt(pi)) + (1 - (1 / (2 * xb * xb))) * erf(xb)
+        # println("Hd_coll = ", Hd_coll)
         Xd_coll = 1 / xa
+        # println("Xd_coll = ", Xd_coll)
         nu_d = fac * Hd_coll * Xd_coll
+        # println("nu_d xb greater than 1e-4 = ", nu_d)
     end
 
 	return nu_d
@@ -194,17 +199,25 @@ function myHSenefunc(x)
     q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
 
     eps = rmin[ir_global] / rmaj[ir_global]
+    println("eps = ", eps)
 
 	nu_d_tot = 0.0
 	for js in 1:n_species
 		nu_d = get_coll_freqs(ir_global,is_globalFunc,js,ene,ddFunc)
-		nu_d_tot += nu_d * nu[:,is_globalFunc][ir_global]  
+		nu_d_tot += nu_d * nu[:,is_globalFunc][ir_global] 
+        println("nu[:,is_globalFunc][ir_global] = ", nu[:,is_globalFunc][ir_global]) 
         # println("nu_d_tot = ", nu_d_tot)
 	end
 
 	ft_star = (3.0 * pi / 16.0) * eps^2 * vth[:,is_globalFunc][ir_global] * sqrt(2.0) * ene^1.5 / (rmaj[ir_global] * abs(q[ir_global]) * nu_d_tot)
+    # println("vth[:,is_global][ir_global] = ", vth[:,is_globalFunc][ir_global])
+    # println("eps = ", eps)
+    println("ft_star = ", ft_star)
+    println("nu_d_tot = ", nu_d_tot)
+
     ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
     ft_fac = 1.0 / (1.0 + ftrap[ir_global] / ft_star)
+    println("ft_fac = ", ft_fac)
 
     if ietypeFunc == 1
 	    myHSenefunc = val * nu_d_tot * ene * ft_fac
@@ -217,8 +230,6 @@ function myHSenefunc(x)
 	return myHSenefunc
 
 end
-
-Bmag2_avg = 0.68
 
 function compute_HS(ir, dd::IMAS.dd)
     global ddFunc = dd
@@ -245,9 +256,7 @@ function compute_HS(ir, dd::IMAS.dd)
     b_field_average = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.b_field_average).(cp1d.grid.rho_tor_norm)
     Bmag2_avg = (b_field_average ./ bunit).^2
 
-    global ir_global = ir 
-
-	Nx = 10 # Can be lowered to speed up calculation time
+	Nx = 100 # Can be lowered to speed up calculation time
 	integ_order = 8
 	omega_fac = 1.0 / Bmag2_avg[ir]
 	HS_I_div_psip = rmaj[ir] * q[ir] / rmin[ir] 
@@ -261,9 +270,9 @@ function compute_HS(ir, dd::IMAS.dd)
 		for ietype in 1:3
             global ietypeFunc = ietype
             global is_globalFunc = is_global
+            global ir_global = ir 
 
 			eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx)
-            # println("eii_val = ", eii_val)
 
 			if ietype == 1
 				nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
