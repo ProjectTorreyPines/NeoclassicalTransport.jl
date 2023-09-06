@@ -92,8 +92,23 @@ function run_neo(input_neo::InputNEO)
 		setfield!(flux_solution, Symbol("MOMENTUM_FLUX_$species"), tgyro_fluxes[4+(i*4)])
 	end
 
-	return (flux_solution)
+    energy_flux_electrons = getfield(flux_solution, Symbol("ENERGY_FLUX_$(input_neo.N_SPECIES)")) # electrons are always the last species in the list
+    total_ion_energy_flux = -energy_flux_electrons # exclude electron energy flux from total ion energy flux
+    particle_flux_electrons = getfield(flux_solution, Symbol("PARTICLE_FLUX_$(input_neo.N_SPECIES)"))
 
+    for field in fieldnames(NEO.flux_solution)
+        if ismissing(getfield(flux_solution, field))
+            setfield!(flux_solution, field, 0.0)
+        end
+
+        if occursin("ENERGY", string(field))
+            total_ion_energy_flux += getfield(flux_solution, field) 
+        end
+    end
+
+    total_fluxes = IMAS.flux_solution(particle_flux_electrons, 0.0, energy_flux_electrons, total_ion_energy_flux)
+
+    return total_fluxes
 end
 
 end
