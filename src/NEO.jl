@@ -1,6 +1,6 @@
 module NEO
 
-mutable struct flux_solution
+Base.@kwdef mutable struct flux_solution
 	PARTICLE_FLUX_1::Union{Float64, Missing} = missing
 	ENERGY_FLUX_1::Union{Float64, Missing} = missing
 	MOMENTUM_FLUX_1::Union{Float64, Missing} = missing
