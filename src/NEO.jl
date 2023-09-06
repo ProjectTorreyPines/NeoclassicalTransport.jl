@@ -1,6 +1,6 @@
 module NEO
 
-Base.@kwdef mutable struct flux_solution
+mutable struct flux_solution
 	PARTICLE_FLUX_1::Union{Float64, Missing} = missing
 	ENERGY_FLUX_1::Union{Float64, Missing} = missing
 	MOMENTUM_FLUX_1::Union{Float64, Missing} = missing
@@ -48,6 +48,7 @@ end
 
 include("input_neo.jl")
 include("hirshman_sigmar.jl")
+include("chang_hinton.jl")
 
 function run_neo(input_neo::InputNEO)
 	folder = mktempdir()
