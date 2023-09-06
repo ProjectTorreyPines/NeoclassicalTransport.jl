@@ -15,7 +15,7 @@ function build_parameter_matrices(dd::IMAS.dd)
     k = IMAS.gacode_units.k # erg/eV
     mp = IMAS.constants.m_p * 1e3 # g
    
-	loglam = 24.0 .- log.(sqrt.(cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature))
+    loglam = IMAS.loglam(cp1d)
     
     n_norm = cp1d.electrons.density ./ 1e6 
     t_norm = cp1d.electrons.temperature
