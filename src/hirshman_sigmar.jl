@@ -249,13 +249,40 @@ function compute_HS(ir, dd::IMAS.dd)
     rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
 
-    rho = cp1d.grid.rho_tor_norm
+    rho = IMAS.rho_s(cp1d,eqt) ./ a
     q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
 
-    bunit = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
-    b_field_average = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.b_field_average).(cp1d.grid.rho_tor_norm)
-    Bmag2_avg = (b_field_average ./ bunit).^2
+    rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
+    bunit_eqt = IMAS.gradient(2*pi*rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
+    r, z, PSI_interpolant = IMAS.ψ_interpolant(eqt.profiles_2d[1])
+
+    Bmag2_avgs = zeros(Real, length(eqt.profiles_1d.psi))
+
+    for (k, psi_level0) in reverse!(collect(enumerate(eqt.profiles_1d.psi)))    
+        r, z, PSI_interpolant = IMAS.ψ_interpolant(eqt.profiles_2d[1])
+        PSI = eqt.profiles_2d[1].psi
+        pr, pz, psi_level = IMAS.flux_surface(r, z, PSI, eqt.profiles_1d.psi, eqt.global_quantities.magnetic_axis.r, eqt.global_quantities.magnetic_axis.z, psi_level0, true)
+
+        Br, Bz = IMAS.Br_Bz(PSI_interpolant, pr, pz)
+        Bp2 = Br .^ 2.0 .+ Bz .^ 2.0
+        Bp_abs = sqrt.(Bp2)
+        
+        dl = vcat(0.0, sqrt.(diff(pr) .^ 2 + diff(pz) .^ 2))
+        ll = cumsum(dl)
+        fluxexpansion = 1.0 ./ Bp_abs
+        int_fluxexpansion_dl = IMAS.integrate(ll, fluxexpansion)
+        
+        Bt = eqt.profiles_1d.f[k] ./ pr
+        Btot = sqrt.(Bp2 .+ Bt .^ 2)
+        
+        Bunit = bunit_eqt[k]
+        # println("bunit = ", bunit)
+        
+        Bmag2_avgs[k] = (IMAS.flxAvg((Btot ./ Bunit).^2, ll, fluxexpansion, int_fluxexpansion_dl))
+
+    end
+    Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avgs).(cp1d.grid.rho_tor_norm)
 	Nx = 100 # Can be lowered to speed up calculation time
 	integ_order = 8
 	omega_fac = 1.0 / Bmag2_avg[ir]
