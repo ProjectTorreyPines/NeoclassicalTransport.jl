@@ -317,7 +317,7 @@ function compute_HS(ir, dd:: IMAS.dd, parameter_matrices::NEO.parameter_matrices
             global ir_global = ir 
             global is_globalHS = is_global
 
-			eii_val = gauss_integ2(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx)
+			eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx)
 
 			if ietype == 1
 				nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
