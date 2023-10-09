@@ -372,7 +372,9 @@ function compute_HS(ir::Int, dd:: IMAS.dd, parameter_matrices::NEO.parameter_mat
 
 end
 
-function HS_to_GB(pflux_multi::Vector{Float64}, eflux_multi::Vector{Float64}, dd::IMAS.dd, rho::Int)
+function HS_to_GB(HS_solution::Tuple{Vector{Float64}, Vector{Float64}}, dd::IMAS.dd, rho::Int)
+    pflux_multi, eflux_multi = HS_solution
+    
     eqt = dd.equilibrium.time_slice[]
 	cp1d = dd.core_profiles.profiles_1d[]
     
@@ -387,5 +389,14 @@ function HS_to_GB(pflux_multi::Vector{Float64}, eflux_multi::Vector{Float64}, dd
     Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star.^2
     Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star.^2 
 
-    return pflux_multi ./ Gamma_neo_GB , eflux_multi ./ Q_neo_GB
+    pflux_norm =  pflux_multi ./ Gamma_neo_GB 
+    eflux_norm = eflux_multi ./ Q_neo_GB
+
+    particle_flux_e = pflux_norm[end]
+    energy_flux_e = eflux_norm[end]
+
+    energy_flux_i = sum(eflux_norm) - energy_flux_e
+
+    HS_fluxes = IMAS.flux_solution(particle_flux_e, 0.0, energy_flux_e, energy_flux_i)
+    return HS_fluxes
 end
