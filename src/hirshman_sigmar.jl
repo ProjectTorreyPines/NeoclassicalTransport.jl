@@ -139,7 +139,7 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
 	return x, w
 end
 
-function gauss_integ(xmin, xmax, func, order::Int, n_subdiv::Int)
+function gauss_integ(xmin::Float64, xmax::Float64, func, order::Int, n_subdiv::Int)
 
 	x0, w0 = gauss_legendre(0, 1, order)
 
@@ -239,7 +239,7 @@ function myHSenefunc(x::Float64)
 
 end
 
-function compute_HS(ir, dd:: IMAS.dd, parameter_matrices::NEO.parameter_matrices)
+function compute_HS(ir::Int, dd:: IMAS.dd, parameter_matrices::NEO.parameter_matrices)
     global ddHS = dd
     global parameter_matricesHS = parameter_matrices
 
@@ -371,4 +371,22 @@ function compute_HS(ir, dd:: IMAS.dd, parameter_matrices::NEO.parameter_matrices
 
 	return  pflux_multi, eflux_multi
 
+end
+
+function HS_to_GB(pflux_multi::Vector{Float64}, eflux_multi::Vector{Float64}, dd::IMAS.dd, rho::Int)
+    eqt = dd.equilibrium.time_slice[]
+	cp1d = dd.core_profiles.profiles_1d[]
+    
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    a = rmin[end]
+
+    neo_rho_star = (IMAS.rho_s(cp1d,eqt) ./ a)[rho]
+    
+    temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
+    dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
+
+    Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star.^2
+    Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star.^2 
+
+    return pflux_multi ./ Gamma_neo_GB , eflux_multi ./ Q_neo_GB
 end
