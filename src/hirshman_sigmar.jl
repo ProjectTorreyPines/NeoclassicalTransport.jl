@@ -32,7 +32,6 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     n_norm = cp1d.electrons.density ./ 1e6 
     t_norm = cp1d.electrons.temperature
 
-    # m_norm = 2.014102 # mass of deuterium in atomic mass units
     m_norm = 2.0
     nu_norm = sqrt.(k .* cp1d.electrons.temperature ./ md) ./ a
 
@@ -209,7 +208,7 @@ function myHSenefunc(x::Float64)
 	de = 2.0 * sqrt(emax) / xa
 	val = de * exp(-ene)
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt) # the function r_min_core_profiles already does the conversion from m_to_cm
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
     rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
     q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
