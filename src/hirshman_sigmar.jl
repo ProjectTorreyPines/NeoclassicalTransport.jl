@@ -243,7 +243,9 @@ function myHSenefunc(x::Float64)
 
 end
 
-function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices)
+function compute_HS(ir::Int, dd::IMAS.dd)
+    parameter_matrices = NEO.get_ion_electron_parameters(dd)
+
 	global ddHS = dd
 	global parameter_matricesHS = parameter_matrices
 
