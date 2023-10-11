@@ -232,8 +232,8 @@ end
 
 function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
 	cp1d = dd.core_profiles.profiles_1d[]
-    
-    rmin = equilibrium_geometry.rmin
+
+	rmin = equilibrium_geometry.rmin
 	rmaj = equilibrium_geometry.rmaj
 	a = equilibrium_geometry.a
 	q = equilibrium_geometry.q
