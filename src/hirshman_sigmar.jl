@@ -75,39 +75,12 @@ function get_ion_electron_parameters(dd::IMAS.dd)
 
 	vth[:, end] = sqrt.((cp1d.electrons.temperature ./ t_norm) ./ (0.00054858 ./ m_norm))
 
-    # calculation of Bmag2_avg
-
     rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
 	bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
-	r, z, PSI_interpolant = IMAS.ψ_interpolant(eqt.profiles_2d[1])
+	Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^2
+	Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
-	Bmag2_avgs = zeros(Real, length(eqt.profiles_1d.psi))
-
-	for (k, psi_level0) in reverse!(collect(enumerate(eqt.profiles_1d.psi)))
-		r, z, PSI_interpolant = IMAS.ψ_interpolant(eqt.profiles_2d[1])
-		PSI = eqt.profiles_2d[1].psi
-		pr, pz, psi_level = IMAS.flux_surface(r, z, PSI, eqt.profiles_1d.psi, eqt.global_quantities.magnetic_axis.r, eqt.global_quantities.magnetic_axis.z, psi_level0, true)
-
-		Br, Bz = IMAS.Br_Bz(PSI_interpolant, pr, pz)
-		Bp2 = Br .^ 2.0 .+ Bz .^ 2.0
-		Bp_abs = sqrt.(Bp2)
-
-		dl = vcat(0.0, sqrt.(diff(pr) .^ 2 + diff(pz) .^ 2))
-		ll = cumsum(dl)
-		fluxexpansion = 1.0 ./ Bp_abs
-		int_fluxexpansion_dl = IMAS.integrate(ll, fluxexpansion)
-
-		Bt = eqt.profiles_1d.f[k] ./ pr
-		Btot = sqrt.(Bp2 .+ Bt .^ 2)
-
-		Bunit = bunit_eqt[k]
-
-		Bmag2_avgs[k] = (IMAS.flxAvg((Btot ./ Bunit) .^ 2, ll, fluxexpansion, int_fluxexpansion_dl))
-
-	end
-
-	Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avgs).(cp1d.grid.rho_tor_norm)
 
 	parameter_matrices.Z = Z
 	parameter_matrices.mass = mass
