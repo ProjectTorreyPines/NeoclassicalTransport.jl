@@ -12,40 +12,40 @@ Base.@kwdef mutable struct parameter_matrices
 end
 
 function get_equilibrium_parameters(dd::IMAS.dd)
-    equilibrium_geometry = NEO.equilibrium_geometry()
+	equilibrium_geometry = NEO.equilibrium_geometry()
 
-    eqt = dd.equilibrium.time_slice[]
+	eqt = dd.equilibrium.time_slice[]
 	eq1d = eqt.profiles_1d
 	cp1d = dd.core_profiles.profiles_1d[]
 
-    m_to_cm = IMAS.gacode_units.m_to_cm
+	m_to_cm = IMAS.gacode_units.m_to_cm
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
 	a = rmin[end]
 	rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
 	q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
 
-    ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
+	ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
 
-    rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
+	rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
 	bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
-    Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^2
+	Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^ 2
 	Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
-    f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
+	f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
 	bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
 	f = f_cp .* m_to_cm ./ bunit_cp
 
-    equilibrium_geometry.rmin = rmin
-    equilibrium_geometry.rmaj = rmaj
-    equilibrium_geometry.a = a 
-    equilibrium_geometry.q = q
-    equilibrium_geometry.ftrap = ftrap
-    equilibrium_geometry.Bmag2_avg = Bmag2_avg
-    equilibrium_geometry.f = f
+	equilibrium_geometry.rmin = rmin
+	equilibrium_geometry.rmaj = rmaj
+	equilibrium_geometry.a = a
+	equilibrium_geometry.q = q
+	equilibrium_geometry.ftrap = ftrap
+	equilibrium_geometry.Bmag2_avg = Bmag2_avg
+	equilibrium_geometry.f = f
 
-    return equilibrium_geometry
+	return equilibrium_geometry
 
 end
 
@@ -53,7 +53,7 @@ function get_ion_electron_parameters(dd::IMAS.dd)
 	parameter_matrices = NEO.parameter_matrices()
 
 	eqt = dd.equilibrium.time_slice[]
-    eq1d = eqt.profiles_1d
+	eq1d = eqt.profiles_1d
 	cp1d = dd.core_profiles.profiles_1d[]
 
 	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
@@ -231,13 +231,13 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
 end
 
 function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
+	cp1d = dd.core_profiles.profiles_1d[]
+    
     rmin = equilibrium_geometry.rmin
-    rmaj = equilibrium_geometry.rmaj
-    a = equilibrium_geometry.a 
-    q = equilibrium_geometry.q
-    ftrap = equilibrium_geometry.ftrap
-
-    cp1d = dd.core_profiles.profiles_1d[]
+	rmaj = equilibrium_geometry.rmaj
+	a = equilibrium_geometry.a
+	q = equilibrium_geometry.q
+	ftrap = equilibrium_geometry.ftrap
 
 	nu = parameter_matrices.nu
 	vth = parameter_matrices.vth
@@ -277,14 +277,14 @@ function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_
 end
 
 function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
-    rmin = equilibrium_geometry.rmin
-    a = equilibrium_geometry.a
-    q = equilibrium_geometry.q
-    ftrap = equilibrium_geometry.ftrap
-    Bmag2_avg = equilibrium_geometry.Bmag2_avg
-    f = equilibrium_geometry.f
-    
-    Z = parameter_matrices.Z
+	rmin = equilibrium_geometry.rmin
+	a = equilibrium_geometry.a
+	q = equilibrium_geometry.q
+	ftrap = equilibrium_geometry.ftrap
+	Bmag2_avg = equilibrium_geometry.Bmag2_avg
+	f = equilibrium_geometry.f
+
+	Z = parameter_matrices.Z
 	mass = parameter_matrices.mass
 	dens = parameter_matrices.dens
 	temp = parameter_matrices.temp
