@@ -46,6 +46,16 @@ Base.@kwdef mutable struct flux_solution
 	MOMENTUM_FLUX_11::Union{Float64, Missing} = missing
 end
 
+Base.@kwdef mutable struct equilibrium_geometry
+    rmin::Union{Vector{Float64}, Missing} = missing 
+    rmaj::Union{Vector{Float64}, Missing} = missing 
+    a::Union{Float64, Missing} = missing 
+    q::Union{Vector{Float64}, Missing} = missing 
+    ftrap::Union{Vector{Float64}, Missing} = missing
+    Bmag2_avg::Union{Vector{Float64}, Missing} = missing 
+    f::Union{Vector{Float64}, Missing} = missing
+end
+
 include("input_neo.jl")
 include("hirshman_sigmar.jl")
 include("chang_hinton.jl")
