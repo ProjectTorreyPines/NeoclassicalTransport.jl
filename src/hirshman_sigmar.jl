@@ -138,7 +138,7 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
 	return x, w
 end
 
-function gauss_integ(xmin::Float64, xmax::Float64, func, order::Int, n_subdiv::Int)
+function gauss_integ(xmin::Float64, xmax::Float64, func::Function, order::Int, n_subdiv::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int)
 
 	x0, w0 = gauss_legendre(0, 1, order)
 
@@ -159,16 +159,16 @@ function gauss_integ(xmin::Float64, xmax::Float64, func, order::Int, n_subdiv::I
 
 	answer = 0.0
 	for p in 1:n_node
-		answer = answer + w[p] * func(x[p])
+		answer = answer + w[p] * func(x[p], dd, parameter_matrices, ietype)
 	end
 
 	return answer
 end
 
-function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64)
-	Z = parameter_matricesHS.Z
-	dens = parameter_matricesHS.dens
-	vth = parameter_matricesHS.vth
+function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, parameter_matrices::NEO.parameter_matrices)
+	Z = parameter_matrices.Z
+	dens = parameter_matrices.dens
+	vth = parameter_matrices.vth
 
 	fac = (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[:, js_loc][ir_loc] / dens[:, is_loc][ir_loc])
 
@@ -191,14 +191,14 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64)
 	return nu_d
 end
 
-function myHSenefunc(x::Float64)
-	cp1d = ddHS.core_profiles.profiles_1d[]
-	eq = ddHS.equilibrium
+function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int)
+	cp1d = dd.core_profiles.profiles_1d[]
+	eq = dd.equilibrium
 	eqt = eq.time_slice[]
 	eq1d = eqt.profiles_1d
 
-	nu = parameter_matricesHS.nu
-	vth = parameter_matricesHS.vth
+	nu = parameter_matrices.nu
+	vth = parameter_matrices.vth
 
 	m_to_cm = IMAS.gacode_units.m_to_cm
 
@@ -222,7 +222,7 @@ function myHSenefunc(x::Float64)
 
 	nu_d_tot = 0.0
 	for js in 1:n_species
-		nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene)
+		nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameter_matrices)
 		nu_d_tot += nu_d * nu[:, is_globalHS][ir_global]
 	end
 
@@ -231,11 +231,11 @@ function myHSenefunc(x::Float64)
 	ft_fac = 1.0 / (1.0 + ftrap[ir_global] / ft_star)
 
 
-	if ietypeHS == 1
+	if ietype == 1
 		myHSenefunc = val * nu_d_tot * ene * ft_fac
-	elseif ietypeHS == 2
+	elseif ietype == 2
 		myHSenefunc = val * nu_d_tot * ene * ene * ft_fac
-	elseif ietypeHS == 3
+	elseif ietype == 3
 		myHSenefunc = val * nu_d_tot * ene * ene * ene * ft_fac
 	end
 
@@ -246,26 +246,22 @@ end
 function compute_HS(ir::Int, dd::IMAS.dd)
     parameter_matrices = NEO.get_ion_electron_parameters(dd)
 
-	global ddHS = dd
-	global parameter_matricesHS = parameter_matrices
+	Z = parameter_matrices.Z
+	mass = parameter_matrices.mass
+	dens = parameter_matrices.dens
+	temp = parameter_matrices.temp
+	dlnndr = parameter_matrices.dlnndr
+	dlntdr = parameter_matrices.dlntdr
 
-	Z = parameter_matricesHS.Z
-	mass = parameter_matricesHS.mass
-	dens = parameter_matricesHS.dens
-	temp = parameter_matricesHS.temp
-	dlnndr = parameter_matricesHS.dlnndr
-	dlntdr = parameter_matricesHS.dlntdr
-
-	eqt = ddHS.equilibrium.time_slice[]
+	eqt = dd.equilibrium.time_slice[]
 	eq1d = eqt.profiles_1d
-	cp1d = ddHS.core_profiles.profiles_1d[]
+	cp1d = dd.core_profiles.profiles_1d[]
 
 	n_species = length(cp1d.ion) + 1
 	m_to_cm = IMAS.gacode_units.m_to_cm
 
 	ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
 
-	rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
 	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
 	a = rmin[end]
 
@@ -319,11 +315,10 @@ function compute_HS(ir::Int, dd::IMAS.dd)
 
 	for is_global in 1:n_species
 		for ietype in 1:3
-			global ietypeHS = ietype
 			global ir_global = ir
 			global is_globalHS = is_global
 
-			eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx)
+			eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, dd, parameter_matrices, ietype)
 
 			if ietype == 1
 				nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
