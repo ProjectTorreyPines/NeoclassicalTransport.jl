@@ -396,3 +396,8 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64}, Vector{Float64}}, dd::IMAS
 	HS_fluxes = IMAS.flux_solution(particle_flux_e, 0.0, energy_flux_e, energy_flux_i)
 	return HS_fluxes
 end
+
+function hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
+    hs = compute_HS(ir, dd, parameter_matrices, equilibrium_geometry)
+    return HS_to_GB(hs, dd, ir)
+end
