@@ -5,7 +5,7 @@
         rho_fluxmatch::Real,
         iion::Integer)
 
-Calculates the neoclassical flux using Chang-Hinton model which has has been modified assuming Zi = 1, and ni=ne 
+Calculates the neoclassical flux using Chang-Hinton model which has has been modified assuming Zi = 1, and ni=ne
 """
 function changhinton(
     eqt::IMAS.equilibrium__time_slice,
@@ -82,21 +82,24 @@ function changhinton(
           /
           (1.0 + c0 * mu_star * sqrt(eps * eps * eps)))
 
-    K2 = ((k0 * (1.0 + 1.54 * alpha)
-           +
-           (1.88 * sqrt(eps) - 1.54 * eps) * (1.0 + 3.75 * alpha)) * CH_Bmag2inv_avg
-          /
-          (1 + a0 * sqrt(mu_star) + b0 * mu_star)
-          +
-          k0 * sqrt(eps * eps * eps) * (c0 * c0 / b0) * mu_star * F2
-          * (1.0 + 1.33 * alpha * (1.0 + 0.6 * alpha) / (1.0 + 1.79 * alpha))
-          /
-          (1.0 + c0 * sqrt(eps * eps * eps) * mu_star))
+    K2 = (
+        (k0 * (1.0 + 1.54 * alpha)
+         +
+         (1.88 * sqrt(eps) - 1.54 * eps) * (1.0 + 3.75 * alpha)) * CH_Bmag2inv_avg
+        /
+        (1 + a0 * sqrt(mu_star) + b0 * mu_star)
+        +
+        k0 * sqrt(eps * eps * eps) * (c0 * c0 / b0) * mu_star * F2
+        * (1.0 + 1.33 * alpha * (1.0 + 0.6 * alpha) / (1.0 + 1.79 * alpha))
+        /
+        (1.0 + c0 * sqrt(eps * eps * eps) * mu_star)
+    )
 
     neo_rho_star_in = 0.001
-    
+
     efluxi = (CH_I_div_psip^2
-              * Ti / Te
+              *
+              Ti / Te
               * (cp1d.ion[iion].element[1].a / Zi^2 * neo_rho_star_in^2 * sqrt(eps) * nui_HH)
               * ((K2 + K1) * dlntdr + K1 * dlnndr))
 

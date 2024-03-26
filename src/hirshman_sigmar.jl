@@ -1,400 +1,413 @@
 using SpecialFunctions
 
 Base.@kwdef mutable struct parameter_matrices
-	Z::Union{Vector{Float64}, Missing} = missing
-	mass::Union{Vector{Float64}, Missing} = missing
-	dens::Union{Matrix{Float64}, Missing} = missing
-	temp::Union{Matrix{Float64}, Missing} = missing
-	nu::Union{Matrix{Float64}, Missing} = missing
-	dlnndr::Union{Matrix{Float64}, Missing} = missing
-	dlntdr::Union{Matrix{Float64}, Missing} = missing
-	vth::Union{Matrix{Float64}, Missing} = missing
+    Z::Union{Vector{Float64},Missing} = missing
+    mass::Union{Vector{Float64},Missing} = missing
+    dens::Union{Matrix{Float64},Missing} = missing
+    temp::Union{Matrix{Float64},Missing} = missing
+    nu::Union{Matrix{Float64},Missing} = missing
+    dlnndr::Union{Matrix{Float64},Missing} = missing
+    dlntdr::Union{Matrix{Float64},Missing} = missing
+    vth::Union{Matrix{Float64},Missing} = missing
 end
 
 function get_equilibrium_parameters(dd::IMAS.dd)
-	equilibrium_geometry = NEO.equilibrium_geometry()
+    equilibrium_geometry = NEO.equilibrium_geometry()
 
-	eqt = dd.equilibrium.time_slice[]
-	eq1d = eqt.profiles_1d
-	cp1d = dd.core_profiles.profiles_1d[]
+    eqt = dd.equilibrium.time_slice[]
+    eq1d = eqt.profiles_1d
+    cp1d = dd.core_profiles.profiles_1d[]
 
-	m_to_cm = IMAS.gacode_units.m_to_cm
+    m_to_cm = IMAS.gacode_units.m_to_cm
 
-	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
-	a = rmin[end]
-	rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
-	q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    a = rmin[end]
+    rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
+    q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
 
-	ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
+    ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
 
-	rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
-	bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
+    rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
+    bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
-	Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^ 2
-	Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
+    Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^ 2
+    Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
-	f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
-	bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
-	f = f_cp .* m_to_cm ./ bunit_cp
+    f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
+    f = f_cp .* m_to_cm ./ bunit_cp
 
-	equilibrium_geometry.rmin = rmin
-	equilibrium_geometry.rmaj = rmaj
-	equilibrium_geometry.a = a
-	equilibrium_geometry.q = q
-	equilibrium_geometry.ftrap = ftrap
-	equilibrium_geometry.Bmag2_avg = Bmag2_avg
-	equilibrium_geometry.f = f
+    equilibrium_geometry.rmin = rmin
+    equilibrium_geometry.rmaj = rmaj
+    equilibrium_geometry.a = a
+    equilibrium_geometry.q = q
+    equilibrium_geometry.ftrap = ftrap
+    equilibrium_geometry.Bmag2_avg = Bmag2_avg
+    equilibrium_geometry.f = f
 
-	return equilibrium_geometry
+    return equilibrium_geometry
 
 end
 
 function get_ion_electron_parameters(dd::IMAS.dd)
-	parameter_matrices = NEO.parameter_matrices()
+    parameter_matrices = NEO.parameter_matrices()
 
-	eqt = dd.equilibrium.time_slice[]
-	eq1d = eqt.profiles_1d
-	cp1d = dd.core_profiles.profiles_1d[]
+    eqt = dd.equilibrium.time_slice[]
+    eq1d = eqt.profiles_1d
+    cp1d = dd.core_profiles.profiles_1d[]
 
-	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
-	a = rmin[end]
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    a = rmin[end]
 
-	num_ions = length(cp1d.ion)
+    num_ions = length(cp1d.ion)
 
-	e = IMAS.gacode_units.e # statcoul
-	k = IMAS.gacode_units.k # erg/eV
-	mp = IMAS.constants.m_p * 1e3 # g
-	md = 3.34358e-27 * 1e3
+    e = IMAS.gacode_units.e # statcoul
+    k = IMAS.gacode_units.k # erg/eV
+    mp = IMAS.constants.m_p * 1e3 # g
+    md = 3.34358e-27 * 1e3
 
-	loglam = 24.0 .- log.(sqrt.(cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature))
+    loglam = 24.0 .- log.(sqrt.(cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature))
 
-	n_norm = cp1d.electrons.density ./ 1e6
-	t_norm = cp1d.electrons.temperature
+    n_norm = cp1d.electrons.density ./ 1e6
+    t_norm = cp1d.electrons.temperature
 
-	m_norm = 2.0
-	nu_norm = sqrt.(k .* cp1d.electrons.temperature ./ md) ./ a
+    m_norm = 2.0
+    nu_norm = sqrt.(k .* cp1d.electrons.temperature ./ md) ./ a
 
-	Z = Vector{Float64}(undef, num_ions + 1)
-	mass = Vector{Float64}(undef, num_ions + 1)
+    Z = Vector{Float64}(undef, num_ions + 1)
+    mass = Vector{Float64}(undef, num_ions + 1)
 
-	dens = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
-	temp = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-	vth = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-	nu = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-	dlnndr = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
-	dlntdr = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
+    dens = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
+    temp = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
+    vth = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
+    nu = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
+    dlnndr = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
+    dlntdr = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
 
-	for i in 1:num_ions
-		Z[i] = cp1d.ion[i].element[1].z_n
-		mass[i] = cp1d.ion[i].element[1].a ./ m_norm
+    for i in 1:num_ions
+        Z[i] = cp1d.ion[i].element[1].z_n
+        mass[i] = cp1d.ion[i].element[1].a ./ m_norm
 
-		dens[:, i] = cp1d.ion[i].density ./ 1e6 ./ n_norm
-		temp[:, i] = cp1d.ion[i].temperature ./ t_norm
+        dens[:, i] = cp1d.ion[i].density ./ 1e6 ./ n_norm
+        temp[:, i] = cp1d.ion[i].temperature ./ t_norm
 
-		nu[:, i] = (@. sqrt(2) * pi * (cp1d.ion[i].density ./ 1e6) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
+        nu[:, i] = (@. sqrt(2) * pi * (cp1d.ion[i].density ./ 1e6) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
 
-		dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density)
-		dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature)
+        dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density)
+        dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature)
 
-		vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a ./ m_norm))
-	end
+        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a ./ m_norm))
+    end
 
-	# tacking on electron parameters at the end 
-	Z[end] = -1.0
-	mass[end] = 0.00054858 / m_norm # 0.00054858 is the mass of an electron in AMU
-	dens[:, end] = cp1d.electrons.density ./ 1e6 ./ n_norm
-	temp[:, end] = cp1d.electrons.temperature ./ t_norm
+    # tacking on electron parameters at the end 
+    Z[end] = -1.0
+    mass[end] = 0.00054858 / m_norm # 0.00054858 is the mass of an electron in AMU
+    dens[:, end] = cp1d.electrons.density ./ 1e6 ./ n_norm
+    temp[:, end] = cp1d.electrons.temperature ./ t_norm
 
-	nu[:, end] = (@. sqrt(2) * pi * (cp1d.electrons.density ./ 1e6) * (Z[end] * e)^4.0 * loglam / sqrt(0.00054858 * mp) / (k .* cp1d.electrons.temperature)^1.5) ./ nu_norm
+    nu[:, end] = (@. sqrt(2) * pi * (cp1d.electrons.density ./ 1e6) * (Z[end] * e)^4.0 * loglam / sqrt(0.00054858 * mp) / (k .* cp1d.electrons.temperature)^1.5) ./ nu_norm
 
-	dlnndr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density)
-	dlntdr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature)
+    dlnndr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density)
+    dlntdr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature)
 
-	vth[:, end] = sqrt.((cp1d.electrons.temperature ./ t_norm) ./ (0.00054858 ./ m_norm))
+    vth[:, end] = sqrt.((cp1d.electrons.temperature ./ t_norm) ./ (0.00054858 ./ m_norm))
 
-	parameter_matrices.Z = Z
-	parameter_matrices.mass = mass
-	parameter_matrices.dens = dens
-	parameter_matrices.temp = temp
-	parameter_matrices.nu = nu
-	parameter_matrices.dlnndr = dlnndr
-	parameter_matrices.dlntdr = dlntdr
-	parameter_matrices.vth = vth
+    parameter_matrices.Z = Z
+    parameter_matrices.mass = mass
+    parameter_matrices.dens = dens
+    parameter_matrices.temp = temp
+    parameter_matrices.nu = nu
+    parameter_matrices.dlnndr = dlnndr
+    parameter_matrices.dlntdr = dlntdr
+    parameter_matrices.vth = vth
 
-	return parameter_matrices
+    return parameter_matrices
 end
 
 function gauss_legendre(x1::Int, x2::Int, n::Int)
-	eps = 1e-15
+    eps = 1e-15
 
-	xm = 0.5 * (x2 + x1)
-	xl = 0.5 * (x2 - x1)
+    xm = 0.5 * (x2 + x1)
+    xl = 0.5 * (x2 - x1)
 
-	x = zeros(Float64, n)
-	w = zeros(Float64, n)
+    x = zeros(Float64, n)
+    w = zeros(Float64, n)
 
-	# Exception for n=1 is required:
-	if n == 1
-		x[1] = xm
-		w[1] = 2.0 * xl
-		return x, w
-	end
+    # Exception for n=1 is required:
+    if n == 1
+        x[1] = xm
+        w[1] = 2.0 * xl
+        return x, w
+    end
 
-	# Roots are symmetric. We only need to find half of them.
-	m = (n + 1) / 2
+    # Roots are symmetric. We only need to find half of them.
+    m = (n + 1) / 2
 
-	# Initialize to fail first do test
-	z1 = -1.0
-	pp = 0.0
+    # Initialize to fail first do test
+    z1 = -1.0
+    pp = 0.0
 
-	# Loop over roots.
-	for i in 1:m
-		i = Int(i)
-		z = cos(pi * (i - 0.25) / (n + 0.5))
+    # Loop over roots.
+    for i in 1:m
+        i = Int(i)
+        z = cos(pi * (i - 0.25) / (n + 0.5))
 
-		while abs(z - z1) > eps
-			p1 = 1.0
-			p2 = 0.0
+        while abs(z - z1) > eps
+            p1 = 1.0
+            p2 = 0.0
 
-			for j in 1:n
-				p3 = p2
-				p2 = p1
-				p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
-			end
+            for j in 1:n
+                p3 = p2
+                p2 = p1
+                p1 = ((2 * j - 1) * z * p2 - (j - 1) * p3) / j
+            end
 
-			# p1 is the Legendre polynomial. Now compute its derivative, pp.
-			pp = n * (z * p1 - p2) / (z * z - 1.0)
-			z1 = z
-			z = z1 - p1 / pp
-		end
+            # p1 is the Legendre polynomial. Now compute its derivative, pp.
+            pp = n * (z * p1 - p2) / (z * z - 1.0)
+            z1 = z
+            z = z1 - p1 / pp
+        end
 
-		x[i]     = xm - xl * z
-		x[n+1-i] = xm + xl * z
-		w[i]     = 2.0 * xl / ((1.0 - z * z) * pp * pp)
-		w[n+1-i] = w[i]
-	end
+        x[i] = xm - xl * z
+        x[n+1-i] = xm + xl * z
+        w[i] = 2.0 * xl / ((1.0 - z * z) * pp * pp)
+        w[n+1-i] = w[i]
+    end
 
-	return x, w
+    return x, w
 end
 
-function gauss_integ(xmin::Float64, xmax::Float64, func::Function, order::Int, n_subdiv::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
+function gauss_integ(
+    xmin::Float64,
+    xmax::Float64,
+    func::Function,
+    order::Int,
+    n_subdiv::Int,
+    dd::IMAS.dd,
+    parameter_matrices::NEO.parameter_matrices,
+    ietype::Int,
+    equilibrium_geometry::NEO.equilibrium_geometry
+)
 
-	x0, w0 = gauss_legendre(0, 1, order)
+    x0, w0 = gauss_legendre(0, 1, order)
 
-	dx = (xmax - xmin) / n_subdiv
+    dx = (xmax - xmin) / n_subdiv
 
-	n_node = n_subdiv * order
+    n_node = n_subdiv * order
 
-	x = zeros(Float64, n_subdiv * order)
-	w = zeros(Float64, n_subdiv * order)
+    x = zeros(Float64, n_subdiv * order)
+    w = zeros(Float64, n_subdiv * order)
 
-	for i in 1:n_subdiv
-		for j in 1:order
-			p = (i - 1) * order + j
-			x[p] = xmin + ((i - 1) + x0[j]) * dx
-			w[p] = w0[j] * dx
-		end
-	end
+    for i in 1:n_subdiv
+        for j in 1:order
+            p = (i - 1) * order + j
+            x[p] = xmin + ((i - 1) + x0[j]) * dx
+            w[p] = w0[j] * dx
+        end
+    end
 
-	answer = 0.0
-	for p in 1:n_node
-		answer = answer + w[p] * func(x[p], dd, parameter_matrices, ietype, equilibrium_geometry)
-	end
+    answer = 0.0
+    for p in 1:n_node
+        answer = answer + w[p] * func(x[p], dd, parameter_matrices, ietype, equilibrium_geometry)
+    end
 
-	return answer
+    return answer
 end
 
 function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, parameter_matrices::NEO.parameter_matrices)
-	Z = parameter_matrices.Z
-	dens = parameter_matrices.dens
-	vth = parameter_matrices.vth
+    Z = parameter_matrices.Z
+    dens = parameter_matrices.dens
+    vth = parameter_matrices.vth
 
-	fac = (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[:, js_loc][ir_loc] / dens[:, is_loc][ir_loc])
+    fac = (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[:, js_loc][ir_loc] / dens[:, is_loc][ir_loc])
 
-	xa = sqrt(ene)
-	xb = xa * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])
+    xa = sqrt(ene)
+    xb = xa * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])
 
-	if xb < 1e-4
-		nu_d =
-			fac * (1.0 / sqrt(pi)) *
-			(
-				4.0 / 3.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc]) - 4.0 / 15.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^3 * ene + 2.0 / 35.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^5 * ene^2 -
-				2.0 / 189.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^7 * ene^3
-			)
-	else
-		Hd_coll = exp(-xb * xb) / (xb * sqrt(pi)) + (1 - (1 / (2 * xb * xb))) * erf(xb)
-		Xd_coll = 1 / xa
-		nu_d = fac * Hd_coll * Xd_coll
-	end
+    if xb < 1e-4
+        nu_d =
+            fac * (1.0 / sqrt(pi)) *
+            (
+                4.0 / 3.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc]) - 4.0 / 15.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^3 * ene +
+                2.0 / 35.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^5 * ene^2 -
+                2.0 / 189.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^7 * ene^3
+            )
+    else
+        Hd_coll = exp(-xb * xb) / (xb * sqrt(pi)) + (1 - (1 / (2 * xb * xb))) * erf(xb)
+        Xd_coll = 1 / xa
+        nu_d = fac * Hd_coll * Xd_coll
+    end
 
-	return nu_d
+    return nu_d
 end
 
 function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
-	cp1d = dd.core_profiles.profiles_1d[]
+    cp1d = dd.core_profiles.profiles_1d[]
 
-	rmin = equilibrium_geometry.rmin
-	rmaj = equilibrium_geometry.rmaj
-	a = equilibrium_geometry.a
-	q = equilibrium_geometry.q
-	ftrap = equilibrium_geometry.ftrap
+    rmin = equilibrium_geometry.rmin
+    rmaj = equilibrium_geometry.rmaj
+    a = equilibrium_geometry.a
+    q = equilibrium_geometry.q
+    ftrap = equilibrium_geometry.ftrap
 
-	nu = parameter_matrices.nu
-	vth = parameter_matrices.vth
+    nu = parameter_matrices.nu
+    vth = parameter_matrices.vth
 
-	n_species = length(cp1d.ion) + 1
+    n_species = length(cp1d.ion) + 1
 
-	emin = 0.0
-	emax = 16.0
+    emin = 0.0
+    emax = 16.0
 
-	xa = 2.0 / (1.0 - sqrt(emin / emax))
-	xb = -(1.0 + sqrt(emin / emax)) / (1.0 - sqrt(emin / emax))
-	ene = emax * ((x - xb) / xa)^2
-	de = 2.0 * sqrt(emax) / xa
-	val = de * exp(-ene)
+    xa = 2.0 / (1.0 - sqrt(emin / emax))
+    xb = -(1.0 + sqrt(emin / emax)) / (1.0 - sqrt(emin / emax))
+    ene = emax * ((x - xb) / xa)^2
+    de = 2.0 * sqrt(emax) / xa
+    val = de * exp(-ene)
 
-	eps = rmin[ir_global] / (rmaj[ir_global] .* a)
+    eps = rmin[ir_global] / (rmaj[ir_global] .* a)
 
-	nu_d_tot = 0.0
-	for js in 1:n_species
-		nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameter_matrices)
-		nu_d_tot += nu_d * nu[:, is_globalHS][ir_global]
-	end
+    nu_d_tot = 0.0
+    for js in 1:n_species
+        nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameter_matrices)
+        nu_d_tot += nu_d * nu[:, is_globalHS][ir_global]
+    end
 
-	ft_star = (3.0 * pi / 16.0) * eps^2 * vth[:, is_globalHS][ir_global] * sqrt(2.0) * ene^1.5 / (rmaj[ir_global] * abs(q[ir_global]) * nu_d_tot)
-	ft_fac = 1.0 / (1.0 + ftrap[ir_global] / ft_star)
+    ft_star = (3.0 * pi / 16.0) * eps^2 * vth[:, is_globalHS][ir_global] * sqrt(2.0) * ene^1.5 / (rmaj[ir_global] * abs(q[ir_global]) * nu_d_tot)
+    ft_fac = 1.0 / (1.0 + ftrap[ir_global] / ft_star)
 
-	if ietype == 1
-		myHSenefunc = val * nu_d_tot * ene * ft_fac
-	elseif ietype == 2
-		myHSenefunc = val * nu_d_tot * ene * ene * ft_fac
-	elseif ietype == 3
-		myHSenefunc = val * nu_d_tot * ene * ene * ene * ft_fac
-	end
+    if ietype == 1
+        myHSenefunc = val * nu_d_tot * ene * ft_fac
+    elseif ietype == 2
+        myHSenefunc = val * nu_d_tot * ene * ene * ft_fac
+    elseif ietype == 3
+        myHSenefunc = val * nu_d_tot * ene * ene * ene * ft_fac
+    end
 
-	return myHSenefunc
+    return myHSenefunc
 
 end
 
 function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
-	rmin = equilibrium_geometry.rmin
-	a = equilibrium_geometry.a
-	q = equilibrium_geometry.q
-	ftrap = equilibrium_geometry.ftrap
-	Bmag2_avg = equilibrium_geometry.Bmag2_avg
-	f = equilibrium_geometry.f
+    rmin = equilibrium_geometry.rmin
+    a = equilibrium_geometry.a
+    q = equilibrium_geometry.q
+    ftrap = equilibrium_geometry.ftrap
+    Bmag2_avg = equilibrium_geometry.Bmag2_avg
+    f = equilibrium_geometry.f
 
-	Z = parameter_matrices.Z
-	mass = parameter_matrices.mass
-	dens = parameter_matrices.dens
-	temp = parameter_matrices.temp
-	dlnndr = parameter_matrices.dlnndr
-	dlntdr = parameter_matrices.dlntdr
+    Z = parameter_matrices.Z
+    mass = parameter_matrices.mass
+    dens = parameter_matrices.dens
+    temp = parameter_matrices.temp
+    dlnndr = parameter_matrices.dlnndr
+    dlntdr = parameter_matrices.dlntdr
 
-	eqt = dd.equilibrium.time_slice[]
-	cp1d = dd.core_profiles.profiles_1d[]
+    eqt = dd.equilibrium.time_slice[]
+    cp1d = dd.core_profiles.profiles_1d[]
 
-	n_species = length(cp1d.ion) + 1
+    n_species = length(cp1d.ion) + 1
 
-	rho = IMAS.rho_s(cp1d, eqt) ./ a
+    rho = IMAS.rho_s(cp1d, eqt) ./ a
 
-	Nx = 10 # Can be lowered to speed up calculation time
-	integ_order = 1
-	omega_fac = 1.0 / Bmag2_avg[ir]
-	HS_I_div_psip = -f[ir] * q[ir] / rmin[ir]
+    Nx = 10 # Can be lowered to speed up calculation time
+    integ_order = 1
+    omega_fac = 1.0 / Bmag2_avg[ir]
+    HS_I_div_psip = -f[ir] * q[ir] / rmin[ir]
 
-	nux0 = zeros(Float64, n_species)
-	nux2 = zeros(Float64, n_species)
-	nux4 = zeros(Float64, n_species)
+    nux0 = zeros(Float64, n_species)
+    nux2 = zeros(Float64, n_species)
+    nux4 = zeros(Float64, n_species)
 
-	for is_global in 1:n_species
-		for ietype in 1:3
-			global ir_global = ir
-			global is_globalHS = is_global
+    for is_global in 1:n_species
+        for ietype in 1:3
+            global ir_global = ir
+            global is_globalHS = is_global
 
-			eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, dd, parameter_matrices, ietype, equilibrium_geometry)
+            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, dd, parameter_matrices, ietype, equilibrium_geometry)
 
-			if ietype == 1
-				nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
-			elseif ietype == 2
-				nux2[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
-			elseif ietype == 3
-				nux4[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
-			end
-		end
-	end
+            if ietype == 1
+                nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
+            elseif ietype == 2
+                nux2[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
+            elseif ietype == 3
+                nux4[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
+            end
+        end
+    end
 
-	sum_nm = 0.0
-	for is_global in 1:n_species
-		sum_nm += mass[is_global] * dens[:, is_global][ir] * nux0[is_global]
-	end
+    sum_nm = 0.0
+    for is_global in 1:n_species
+        sum_nm += mass[is_global] * dens[:, is_global][ir] * nux0[is_global]
+    end
 
-	pflux_multi = zeros(Float64, n_species)
-	eflux_multi = zeros(Float64, n_species)
-	for is_global in 1:n_species
-		A1 = -dlnndr[:, is_global][ir] + (1.5 * dlntdr[:, is_global][ir])
-		A2 = -dlntdr[:, is_global][ir]
+    pflux_multi = zeros(Float64, n_species)
+    eflux_multi = zeros(Float64, n_species)
+    for is_global in 1:n_species
+        A1 = -dlnndr[:, is_global][ir] + (1.5 * dlntdr[:, is_global][ir])
+        A2 = -dlntdr[:, is_global][ir]
 
-		pflux_multi[is_global] = 0.0
-		eflux_multi[is_global] = 0.0
+        pflux_multi[is_global] = 0.0
+        eflux_multi[is_global] = 0.0
 
-		L_a = nux0[is_global] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, is_global][ir] * temp[:, is_global][ir] * mass[is_global] / (Z[is_global] * Z[is_global] * 1.0)
+        L_a =
+            nux0[is_global] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, is_global][ir] * temp[:, is_global][ir] * mass[is_global] /
+            (Z[is_global] * Z[is_global] * 1.0)
 
-		for js in 1:n_species
+        for js in 1:n_species
 
-			L_b = nux0[js] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, js][ir] * temp[:, js][ir] * mass[js] / (Z[js] * Z[js] * 1.0)
+            L_b = nux0[js] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, js][ir] * temp[:, js][ir] * mass[js] / (Z[js] * Z[js] * 1.0)
 
-			if is_global == js
-				L11 = -L_a * (sum_nm - mass[is_global] * dens[:, is_global][ir] * nux0[is_global]) / sum_nm
-				L12 = L11 * (nux2[is_global] / nux0[is_global])
-				L22 = (nux2[is_global] / nux0[is_global]) * (L12 + L_a * (nux2[is_global] / nux0[is_global] - nux4[is_global] / nux2[is_global]))
-				L21 = L12
+            if is_global == js
+                L11 = -L_a * (sum_nm - mass[is_global] * dens[:, is_global][ir] * nux0[is_global]) / sum_nm
+                L12 = L11 * (nux2[is_global] / nux0[is_global])
+                L22 = (nux2[is_global] / nux0[is_global]) * (L12 + L_a * (nux2[is_global] / nux0[is_global] - nux4[is_global] / nux2[is_global]))
+                L21 = L12
 
-			else
-				L11 = L_a * (Z[is_global] * temp[:, js][ir]) / (Z[js] * temp[:, is_global][ir]) * mass[js] * dens[:, js][ir] * nux0[js] / sum_nm
-				L12 = (nux2[js] / nux0[js]) * L11
-				L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[:, is_global][ir] * nux0[is_global] / sum_nm) * L_b
-				L22 = (nux2[is_global] / nux0[is_global]) * L12
+            else
+                L11 = L_a * (Z[is_global] * temp[:, js][ir]) / (Z[js] * temp[:, is_global][ir]) * mass[js] * dens[:, js][ir] * nux0[js] / sum_nm
+                L12 = (nux2[js] / nux0[js]) * L11
+                L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[:, is_global][ir] * nux0[is_global] / sum_nm) * L_b
+                L22 = (nux2[is_global] / nux0[is_global]) * L12
 
-			end
+            end
 
-			pflux_multi[is_global] += L11 * A1 + L12 * A2
-			eflux_multi[is_global] += L21 * A1 + L22 * A2
+            pflux_multi[is_global] += L11 * A1 + L12 * A2
+            eflux_multi[is_global] += L21 * A1 + L22 * A2
 
-		end
-	end
+        end
+    end
 
-	return pflux_multi, eflux_multi
+    return pflux_multi, eflux_multi
 
 end
 
-function HS_to_GB(HS_solution::Tuple{Vector{Float64}, Vector{Float64}}, dd::IMAS.dd, rho::Int)
-	pflux_multi, eflux_multi = HS_solution
+function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, dd::IMAS.dd, rho::Int)
+    pflux_multi, eflux_multi = HS_solution
 
-	eqt = dd.equilibrium.time_slice[]
-	cp1d = dd.core_profiles.profiles_1d[]
+    eqt = dd.equilibrium.time_slice[]
+    cp1d = dd.core_profiles.profiles_1d[]
 
-	rmin = IMAS.r_min_core_profiles(cp1d, eqt)
-	a = rmin[end]
+    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    a = rmin[end]
 
-	neo_rho_star = (IMAS.rho_s(cp1d, eqt)./a)[rho]
+    neo_rho_star = (IMAS.rho_s(cp1d, eqt)./a)[rho]
 
-	temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
-	dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
+    temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
+    dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
 
-	Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star .^ 2
-	Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star .^ 2
+    Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star .^ 2
+    Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star .^ 2
 
-	pflux_norm = pflux_multi ./ Gamma_neo_GB
-	eflux_norm = eflux_multi ./ Q_neo_GB
+    pflux_norm = pflux_multi ./ Gamma_neo_GB
+    eflux_norm = eflux_multi ./ Q_neo_GB
 
-	particle_flux_e = pflux_norm[end]
-	energy_flux_e = eflux_norm[end]
+    particle_flux_e = pflux_norm[end]
+    energy_flux_e = eflux_norm[end]
 
-	energy_flux_i = sum(eflux_norm) - energy_flux_e
+    energy_flux_i = sum(eflux_norm) - energy_flux_e
 
-	HS_fluxes = IMAS.flux_solution(particle_flux_e, 0.0, energy_flux_e, energy_flux_i)
-	return HS_fluxes
+    HS_fluxes = IMAS.flux_solution(particle_flux_e, 0.0, energy_flux_e, energy_flux_i)
+    return HS_fluxes
 end
 
 function hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
