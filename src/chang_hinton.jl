@@ -15,28 +15,25 @@ function changhinton(
 
     eq1d = eqt.profiles_1d
 
-    rmin = 0.5 * (eq1d.r_outboard - eq1d.r_inboard)
+    rmin = IMAS.interp1d(rho_eq, 0.5 * (eq1d.r_outboard - eq1d.r_inboard)).(rho_cp)
 
     m_to_cm = 1e2
     Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
 
     a = eqt.boundary.minor_radius * m_to_cm
     rho_cp = cp1d.grid.rho_tor_norm
-    rho_eq = eq1d.rho_tor_norm
-    gridpoint_eq = argmin(abs.(rho_eq .- rho_fluxmatch))
     gridpoint_cp = argmin(abs.(rho_cp .- rho_fluxmatch))
-    eps = rmin[gridpoint_eq] * m_to_cm / Rmaj0
-
-    q = eq1d.q[gridpoint_eq]
 
     ne = cp1d.electrons.density_thermal * 1e-6
     Te = cp1d.electrons.temperature[gridpoint_cp]
     Ti = cp1d.ion[iion].temperature
 
-    rmin = IMAS.interp1d(rho_eq, rmin).(rho_cp)
     Rmaj = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     drmaj = IMAS.gradient(rmin, Rmaj)
     shift = -drmaj[gridpoint_cp]
+
+    eps = rmin[gridpoint_cp] * m_to_cm / Rmaj0
+    q = IMAS.interp1d(rho_eq, eq1d.q).(rho_cp)[gridpoint_cp]
 
     dlntdr = -IMAS.gradient(rmin, Ti)[gridpoint_cp] / Ti[gridpoint_cp]
     dlntdr = dlntdr * a / m_to_cm
