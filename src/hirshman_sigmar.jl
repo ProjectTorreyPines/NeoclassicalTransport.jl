@@ -93,8 +93,8 @@ function get_ion_electron_parameters(dd::IMAS.dd)
 
         nu[:, i] = (@. sqrt(2) * pi * (cp1d.ion[i].density ./ 1e6) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
 
-        dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density)
-        dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature)
+        dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density; method=:backward)
+        dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature; method=:backward)
 
         vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a ./ m_norm))
     end
@@ -107,8 +107,8 @@ function get_ion_electron_parameters(dd::IMAS.dd)
 
     nu[:, end] = (@. sqrt(2) * pi * (cp1d.electrons.density ./ 1e6) * (Z[end] * e)^4.0 * loglam / sqrt(0.00054858 * mp) / (k .* cp1d.electrons.temperature)^1.5) ./ nu_norm
 
-    dlnndr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density)
-    dlntdr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature)
+    dlnndr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density; method=:backward)
+    dlntdr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature; method=:backward)
 
     vth[:, end] = sqrt.((cp1d.electrons.temperature ./ t_norm) ./ (0.00054858 ./ m_norm))
 
