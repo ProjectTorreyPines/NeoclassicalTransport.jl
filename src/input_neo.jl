@@ -245,12 +245,12 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     n1 = dens_1[gridpoint_cp]
 
     dens_e = cp1d.electrons.density ./ 1e6
-    dlnnedr = -IMAS.calc_z(rmin ./ a, dens_e; method=:backward)
+    dlnnedr = -IMAS.calc_z(rmin ./ a, dens_e, :backward)
     ne = dens_e[gridpoint_cp]
     dlnnedr = dlnnedr[gridpoint_cp]
 
     temp_e = cp1d.electrons.temperature
-    dlntedr = -IMAS.calc_z(rmin ./ a, temp_e; method=:backward)
+    dlntedr = -IMAS.calc_z(rmin ./ a, temp_e, :backward)
     Te = temp_e[gridpoint_cp]
     dlntedr = dlntedr[gridpoint_cp]
 
@@ -324,12 +324,12 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
         setfield!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
 
         Ti = ions[iion].temperature ./ t_norm
-        dlntidr = -IMAS.calc_z(rmin ./ a, Ti; method=:backward)
+        dlntidr = -IMAS.calc_z(rmin ./ a, Ti, :backward)
         Ti = Ti[gridpoint_cp]
         dlntidr = dlntidr[gridpoint_cp]
 
         ni = ions[iion].density ./ 1e6 / n_norm
-        dlnnidr = -IMAS.calc_z(rmin ./ a, ni; method=:backward)
+        dlnnidr = -IMAS.calc_z(rmin ./ a, ni, :backward)
         ni = ni[gridpoint_cp]
         dlnnidr = dlnnidr[gridpoint_cp]
 
