@@ -15,12 +15,9 @@ function changhinton(
 
     eq1d = eqt.profiles_1d
 
-    rmin = IMAS.interp1d(rho_eq, 0.5 * (eq1d.r_outboard - eq1d.r_inboard)).(rho_cp)
-
     m_to_cm = 1e2
     Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
 
-    a = eqt.boundary.minor_radius * m_to_cm
     rho_cp = cp1d.grid.rho_tor_norm
     gridpoint_cp = argmin(abs.(rho_cp .- rho_fluxmatch))
 
@@ -29,12 +26,14 @@ function changhinton(
     Ti = cp1d.ion[iion].temperature
 
     Rmaj = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
+    rmin = IMAS.interp1d(rho_eq, 0.5 * (eq1d.r_outboard - eq1d.r_inboard)).(rho_cp)
     drmaj = IMAS.gradient(rmin, Rmaj)
     shift = -drmaj[gridpoint_cp]
 
     eps = rmin[gridpoint_cp] * m_to_cm / Rmaj0
     q = IMAS.interp1d(rho_eq, eq1d.q).(rho_cp)[gridpoint_cp]
 
+    a = eqt.boundary.minor_radius * m_to_cm
     dlntdr = -IMAS.gradient(rmin, Ti)[gridpoint_cp] / Ti[gridpoint_cp]
     dlntdr = dlntdr * a / m_to_cm
     dlnndr = -IMAS.gradient(rmin, ne)[gridpoint_cp] / ne[gridpoint_cp]
