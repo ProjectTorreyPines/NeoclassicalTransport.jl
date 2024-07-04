@@ -34,7 +34,7 @@ function get_equilibrium_parameters(dd::IMAS.dd)
     Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
     f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
-    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eq1d)).(cp1d.grid.rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
     equilibrium_geometry.rmin = rmin
@@ -185,7 +185,9 @@ function gauss_integ(
     n_subdiv::Int,
     parameter_matrices::NEO.parameter_matrices,
     ietype::Int,
-    equilibrium_geometry::NEO.equilibrium_geometry
+    equilibrium_geometry::NEO.equilibrium_geometry,
+    is_globalHS::Int,
+    ir_global::Int
 )
 
     x0, w0 = gauss_legendre(0, 1, order)
@@ -207,7 +209,7 @@ function gauss_integ(
 
     answer = 0.0
     for p in 1:n_node
-        answer = answer + w[p] * func(x[p], parameter_matrices, ietype, equilibrium_geometry)
+        answer = answer + w[p] * func(x[p], parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
     end
 
     return answer
@@ -240,7 +242,7 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
     return nu_d
 end
 
-function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
+function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry, is_globalHS::Int, ir_global::Int)
     rmin = equilibrium_geometry.rmin
     rmaj = equilibrium_geometry.rmaj
     a = equilibrium_geometry.a
@@ -316,10 +318,10 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
 
     for is_global in 1:n_species
         for ietype in 1:3
-            global ir_global = ir
-            global is_globalHS = is_global
+            ir_global = ir
+            is_globalHS = is_global
 
-            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, parameter_matrices, ietype, equilibrium_geometry)
+            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
 
             if ietype == 1
                 nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
