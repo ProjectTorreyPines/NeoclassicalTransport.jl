@@ -364,8 +364,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     input_neo.N_SPECIES = length(ions) + 1 # add 1 to include electrons
 
     # setting sign conventions
-    Bt = @ddtime eq.vacuum_toroidal_field.b0
-
+    Bt = eqt.global_quantities.vacuum_toroidal_field.b0
     input_neo.BTCCW = sign(Bt)
     input_neo.IPCCW = sign(Bt) * sign(q)
 

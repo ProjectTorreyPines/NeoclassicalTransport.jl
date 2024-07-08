@@ -53,8 +53,8 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     parameter_matrices = NEO.parameter_matrices()
 
     eqt = dd.equilibrium.time_slice[]
-    eq1d = eqt.profiles_1d
     cp1d = dd.core_profiles.profiles_1d[]
+    n = length(cp1d.grid.rho_tor_norm)
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
@@ -77,12 +77,12 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     Z = Vector{Float64}(undef, num_ions + 1)
     mass = Vector{Float64}(undef, num_ions + 1)
 
-    dens = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
-    temp = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-    vth = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-    nu = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
-    dlnndr = zeros(Float64, length(cp1d.ion[1].density), num_ions + 1)
-    dlntdr = zeros(Float64, length(cp1d.ion[1].temperature), num_ions + 1)
+    dens = zeros(Float64, n, num_ions + 1)
+    temp = zeros(Float64, n, num_ions + 1)
+    vth = zeros(Float64, n, num_ions + 1)
+    nu = zeros(Float64, n, num_ions + 1)
+    dlnndr = zeros(Float64, n, num_ions + 1)
+    dlntdr = zeros(Float64, n, num_ions + 1)
 
     for i in 1:num_ions
         Z[i] = cp1d.ion[i].element[1].z_n
@@ -183,10 +183,11 @@ function gauss_integ(
     func::Function,
     order::Int,
     n_subdiv::Int,
-    dd::IMAS.dd,
     parameter_matrices::NEO.parameter_matrices,
     ietype::Int,
-    equilibrium_geometry::NEO.equilibrium_geometry
+    equilibrium_geometry::NEO.equilibrium_geometry,
+    is_globalHS::Int,
+    ir_global::Int
 )
 
     x0, w0 = gauss_legendre(0, 1, order)
@@ -208,7 +209,7 @@ function gauss_integ(
 
     answer = 0.0
     for p in 1:n_node
-        answer = answer + w[p] * func(x[p], dd, parameter_matrices, ietype, equilibrium_geometry)
+        answer = answer + w[p] * func(x[p], parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
     end
 
     return answer
@@ -219,18 +220,18 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
     dens = parameter_matrices.dens
     vth = parameter_matrices.vth
 
-    fac = (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[:, js_loc][ir_loc] / dens[:, is_loc][ir_loc])
+    fac = @views (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[ir_loc, js_loc] / dens[ir_loc, is_loc])
 
     xa = sqrt(ene)
-    xb = xa * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])
+    xb = @views xa * (vth[ir_loc, is_loc] / vth[ir_loc, js_loc])
 
     if xb < 1e-4
         nu_d =
             fac * (1.0 / sqrt(pi)) *
             (
-                4.0 / 3.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc]) - 4.0 / 15.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^3 * ene +
-                2.0 / 35.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^5 * ene^2 -
-                2.0 / 189.0 * (vth[:, is_loc][ir_loc] / vth[:, js_loc][ir_loc])^7 * ene^3
+                4.0 / 3.0 * (vth[ir_loc, is_loc] / vth[ir_loc, js_loc]) - 4.0 / 15.0 * (vth[ir_loc, is_loc] / vth[ir_loc, js_loc])^3 * ene +
+                2.0 / 35.0 * (vth[ir_loc, is_loc] / vth[ir_loc, js_loc])^5 * ene^2 -
+                2.0 / 189.0 * (vth[ir_loc, is_loc] / vth[ir_loc, js_loc])^7 * ene^3
             )
     else
         Hd_coll = exp(-xb * xb) / (xb * sqrt(pi)) + (1 - (1 / (2 * xb * xb))) * erf(xb)
@@ -241,9 +242,7 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
     return nu_d
 end
 
-function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry)
-    cp1d = dd.core_profiles.profiles_1d[]
-
+function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry, is_globalHS::Int, ir_global::Int)
     rmin = equilibrium_geometry.rmin
     rmaj = equilibrium_geometry.rmaj
     a = equilibrium_geometry.a
@@ -252,8 +251,6 @@ function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_
 
     nu = parameter_matrices.nu
     vth = parameter_matrices.vth
-
-    n_species = length(cp1d.ion) + 1
 
     emin = 0.0
     emax = 16.0
@@ -267,24 +264,23 @@ function myHSenefunc(x::Float64, dd::IMAS.dd, parameter_matrices::NEO.parameter_
     eps = rmin[ir_global] / (rmaj[ir_global] .* a)
 
     nu_d_tot = 0.0
-    for js in 1:n_species
+    for js in eachindex(parameter_matrices.Z)
         nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameter_matrices)
-        nu_d_tot += nu_d * nu[:, is_globalHS][ir_global]
+        nu_d_tot += nu_d * nu[ir_global, is_globalHS]
     end
 
-    ft_star = (3.0 * pi / 16.0) * eps^2 * vth[:, is_globalHS][ir_global] * sqrt(2.0) * ene^1.5 / (rmaj[ir_global] * abs(q[ir_global]) * nu_d_tot)
+    ft_star = (3.0 * pi / 16.0) * eps^2 * vth[ir_global, is_globalHS] * sqrt(2.0) * ene^1.5 / (rmaj[ir_global] * abs(q[ir_global]) * nu_d_tot)
     ft_fac = 1.0 / (1.0 + ftrap[ir_global] / ft_star)
 
     if ietype == 1
-        myHSenefunc = val * nu_d_tot * ene * ft_fac
+        out = val * nu_d_tot * ene * ft_fac
     elseif ietype == 2
-        myHSenefunc = val * nu_d_tot * ene * ene * ft_fac
+        out = val * nu_d_tot * ene * ene * ft_fac
     elseif ietype == 3
-        myHSenefunc = val * nu_d_tot * ene * ene * ene * ft_fac
+        out = val * nu_d_tot * ene * ene * ene * ft_fac
     end
 
-    return myHSenefunc
-
+    return out
 end
 
 function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
@@ -318,12 +314,14 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
     nux2 = zeros(Float64, n_species)
     nux4 = zeros(Float64, n_species)
 
+    cp1d = dd.core_profiles.profiles_1d[]
+
     for is_global in 1:n_species
         for ietype in 1:3
-            global ir_global = ir
-            global is_globalHS = is_global
+            ir_global = ir
+            is_globalHS = is_global
 
-            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, dd, parameter_matrices, ietype, equilibrium_geometry)
+            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
 
             if ietype == 1
                 nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
@@ -337,36 +335,36 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
 
     sum_nm = 0.0
     for is_global in 1:n_species
-        sum_nm += mass[is_global] * dens[:, is_global][ir] * nux0[is_global]
+        sum_nm += mass[is_global] * dens[ir, is_global] * nux0[is_global]
     end
 
     pflux_multi = zeros(Float64, n_species)
     eflux_multi = zeros(Float64, n_species)
     for is_global in 1:n_species
-        A1 = -dlnndr[:, is_global][ir] + (1.5 * dlntdr[:, is_global][ir])
-        A2 = -dlntdr[:, is_global][ir]
+        A1 = -dlnndr[ir, is_global] + (1.5 * dlntdr[ir, is_global])
+        A2 = -dlntdr[ir, is_global]
 
         pflux_multi[is_global] = 0.0
         eflux_multi[is_global] = 0.0
 
         L_a =
-            nux0[is_global] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, is_global][ir] * temp[:, is_global][ir] * mass[is_global] /
+            nux0[is_global] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[ir, is_global] * temp[ir, is_global] * mass[is_global] /
             (Z[is_global] * Z[is_global] * 1.0)
 
         for js in 1:n_species
 
-            L_b = nux0[js] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[:, js][ir] * temp[:, js][ir] * mass[js] / (Z[js] * Z[js] * 1.0)
+            L_b = nux0[js] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[ir, js] * temp[ir, js] * mass[js] / (Z[js] * Z[js] * 1.0)
 
             if is_global == js
-                L11 = -L_a * (sum_nm - mass[is_global] * dens[:, is_global][ir] * nux0[is_global]) / sum_nm
+                L11 = -L_a * (sum_nm - mass[is_global] * dens[ir, is_global] * nux0[is_global]) / sum_nm
                 L12 = L11 * (nux2[is_global] / nux0[is_global])
                 L22 = (nux2[is_global] / nux0[is_global]) * (L12 + L_a * (nux2[is_global] / nux0[is_global] - nux4[is_global] / nux2[is_global]))
                 L21 = L12
 
             else
-                L11 = L_a * (Z[is_global] * temp[:, js][ir]) / (Z[js] * temp[:, is_global][ir]) * mass[js] * dens[:, js][ir] * nux0[js] / sum_nm
+                L11 = L_a * (Z[is_global] * temp[ir, js]) / (Z[js] * temp[ir, is_global]) * mass[js] * dens[ir, js] * nux0[js] / sum_nm
                 L12 = (nux2[js] / nux0[js]) * L11
-                L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[:, is_global][ir] * nux0[is_global] / sum_nm) * L_b
+                L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[ir, is_global] * nux0[is_global] / sum_nm) * L_b
                 L22 = (nux2[is_global] / nux0[is_global]) * L12
 
             end
