@@ -34,7 +34,7 @@ function get_equilibrium_parameters(dd::IMAS.dd)
     Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
     f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
-    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eq1d)).(cp1d.grid.rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
     equilibrium_geometry.rmin = rmin
