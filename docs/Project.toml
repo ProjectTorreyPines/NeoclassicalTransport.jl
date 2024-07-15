@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+FXP = "e356478e-5a30-45f6-9775-70cc66e4fbd4"
+FuseUtils = "c8e4ee58-0bec-4a6a-b552-9dd24d6374ac"
+IMAS = "13ead8c1-b7d1-41bb-a6d0-5b8b65ed587a"
+MillerExtendedHarmonic = "c82744c2-dc08-461a-8c37-87ab04d0f9b8"

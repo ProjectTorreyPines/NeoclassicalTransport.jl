@@ -57,7 +57,9 @@ Base.@kwdef mutable struct equilibrium_geometry
 end
 
 include("input_neo.jl")
+
 include("hirshman_sigmar.jl")
+
 include("chang_hinton.jl")
 
 function run_neo(input_neo::InputNEO)
@@ -120,5 +122,8 @@ function run_neo(input_neo::InputNEO)
 
     return total_fluxes
 end
+
+const document = Dict()
+document[Symbol(@__MODULE__)] = [name for name in Base.names(@__MODULE__; all=false, imported=false) if name != Symbol(@__MODULE__)]
 
 end
