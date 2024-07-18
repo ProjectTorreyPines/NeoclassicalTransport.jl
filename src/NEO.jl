@@ -62,6 +62,12 @@ include("hirshman_sigmar.jl")
 
 include("chang_hinton.jl")
 
+"""
+    run_neo(input_neo::InputNEO)
+
+Saves input.neo file to a temporary directory, runs NEO on that directory and parses output 
+"""
+
 function run_neo(input_neo::InputNEO)
     folder = mktempdir()
     save_inputneo(input_neo, joinpath(folder, "input.neo"))

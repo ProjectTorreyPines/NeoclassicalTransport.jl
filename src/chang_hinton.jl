@@ -1,11 +1,12 @@
 """
-    neoclassical_changhinton(
+    changhinton(
         eq1d::IMAS.equilibrium__time_slice___profiles_1d, 
         cp1d::IMAS.core_profiles__profiles_1d,
         rho_fluxmatch::Real,
         iion::Integer)
 
-Calculates the neoclassical flux using Chang-Hinton model which has has been modified assuming Zi = 1, and ni=ne
+Calculates the neoclassical flux using Chang-Hinton model which has been modified assuming Zi = 1, and ni=ne
+Ref: C.S. Chang, F.L. Hinton, Phys. Fluids 25, 1493–1494 (1982), https://doi.org/10.1063/1.863934
 """
 function changhinton(
     eqt::IMAS.equilibrium__time_slice,

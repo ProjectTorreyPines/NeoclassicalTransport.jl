@@ -217,6 +217,12 @@ Base.@kwdef mutable struct InputNEO
     THREED_MODEL::Union{Int,Missing} = missing
     THREED_EXB_MODEL::Union{Int,Missing} = missing
 end
+"""
+    InputNEO(dd::IMAS.dd, gridpoint_cp)
+
+Populates InputNEO structure with quantities from dd using NEO normalizations
+
+"""
 
 function InputNEO(dd::IMAS.dd, gridpoint_cp)
     input_neo = InputNEO()

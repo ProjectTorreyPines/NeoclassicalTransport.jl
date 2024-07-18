@@ -11,6 +11,12 @@ Base.@kwdef mutable struct parameter_matrices
     vth::Union{Matrix{Float64},Missing} = missing
 end
 
+"""
+    get_equilibrium_parameters(dd::IMAS.dd)
+
+Populates equilibrium_geometry structure with equilibrium quantities from dd
+"""
+
 function get_equilibrium_parameters(dd::IMAS.dd)
     equilibrium_geometry = NEO.equilibrium_geometry()
 
@@ -48,6 +54,12 @@ function get_equilibrium_parameters(dd::IMAS.dd)
     return equilibrium_geometry
 
 end
+
+"""
+    get_ion_electron_parameters(dd::IMAS.dd)
+
+Populates parameter_matrices structure with profile data from dd using NEO normalizations 
+"""
 
 function get_ion_electron_parameters(dd::IMAS.dd)
     parameter_matrices = NEO.parameter_matrices()
@@ -408,6 +420,12 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, dd::IMAS.
     return HS_fluxes
 end
 
+"""
+    hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
+
+Calculates neoclassical fluxes according to Hirshman-Sigmar model
+Ref: S.P. Hirshman, D.J. Sigmar, J.F. Clarke, Phys. Fluids 19, 656–666 (1976), https://doi.org/10.1063/1.861524
+"""
 function hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
     hs = compute_HS(ir, dd, parameter_matrices, equilibrium_geometry)
     return HS_to_GB(hs, dd, ir)
