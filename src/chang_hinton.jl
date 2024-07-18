@@ -19,6 +19,7 @@ function changhinton(
     m_to_cm = 1e2
     Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
 
+    rho_eq = eq1d.rho_tor_norm
     rho_cp = cp1d.grid.rho_tor_norm
     gridpoint_cp = argmin(abs.(rho_cp .- rho_fluxmatch))
 
