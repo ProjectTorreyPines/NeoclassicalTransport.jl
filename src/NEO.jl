@@ -107,14 +107,14 @@ function run_neo(input_neo::InputNEO)
     momentum_index(index) = 4 .+ ((index .- 1) .* 4)
 
     # sort fluxes
-    electrons_energy_flux = tgyro_fluxes[energy_index(e_index)]
-    electrons_particle_flux = tgyro_fluxes[particle_index(e_index)]
+    electrons_energy_flux = only(tgyro_fluxes[energy_index(e_index)])
+    electrons_particle_flux = only(tgyro_fluxes[particle_index(e_index)])
     ion_particle_flux = tgyro_fluxes[particle_index(i_index)]
     ion_total_energy_flux = sum(tgyro_fluxes[energy_index(i_index)])
     ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
     # assign fluxes to flux_solution structure
-    sol = IMAS.flux_solution(only(electrons_energy_flux), ion_total_energy_flux, only(electrons_particle_flux), ion_particle_flux, ion_total_momentum_flux)
+    sol = IMAS.flux_solution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
     return sol
 end
 
