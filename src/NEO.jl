@@ -114,7 +114,7 @@ function run_neo(input_neo::InputNEO)
     ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
     # assign fluxes to flux_solution structure
-    sol = IMAS.flux_solution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+    sol = IMAS.flux_solution(only(electrons_energy_flux), ion_total_energy_flux, only(electrons_particle_flux), ion_particle_flux, ion_total_momentum_flux)
     return sol
 end
 
