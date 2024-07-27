@@ -411,13 +411,14 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, dd::IMAS.
     pflux_norm = pflux_multi ./ Gamma_neo_GB
     eflux_norm = eflux_multi ./ Q_neo_GB
 
-    particle_flux_e = pflux_norm[end]
     energy_flux_e = eflux_norm[end]
+    energy_flux_i = sum(eflux_norm[1:end-1])
+    particle_flux_e = pflux_norm[end]
+    particle_flux_i = pflux_norm[1:end-1]
 
-    energy_flux_i = sum(eflux_norm) - energy_flux_e
-
-    HS_fluxes = IMAS.flux_solution(particle_flux_e, 0.0, energy_flux_e, energy_flux_i)
-    return HS_fluxes
+    # assign fluxes to flux_solution structure
+    sol = IMAS.flux_solution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
+    return sol
 end
 
 """

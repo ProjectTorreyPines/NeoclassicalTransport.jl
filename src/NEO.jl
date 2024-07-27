@@ -83,50 +83,39 @@ function run_neo(input_neo::InputNEO)
     run(Cmd(`bash command.sh`; dir=folder))
 
     ### parse outputs ###
-    fluxes = Float64[]
-
-    tmp = open(joinpath(folder, "out.neo.transport_flux"), "r") do io
+    tmp_fluxes = Float64[]
+    open(joinpath(folder, "out.neo.transport_flux"), "r") do io
         for line in eachline(io)
             if !startswith(line, "#")
                 for word in split(line)
                     val = tryparse(Float64, word)
                     if val !== nothing
-                        push!(fluxes, val)
+                        push!(tmp_fluxes, val)
                     end
                 end
             end
         end
     end
-
     loc_first_tgyro = (4 * input_neo.N_SPECIES * 2) + 1
-    tgyro_fluxes = fluxes[loc_first_tgyro:end]
+    tgyro_fluxes = tmp_fluxes[loc_first_tgyro:end]
 
-    flux_solution = NEO.flux_solution()
+    # figure out indexes
+    e_index = [input_neo.N_SPECIES]
+    i_index = collect(1:input_neo.N_SPECIES-1)
+    particle_index(index) = 2 .+ ((index .- 1) .* 4)
+    energy_index(index) = 3 .+ ((index .- 1) .* 4)
+    momentum_index(index) = 4 .+ ((index .- 1) .* 4)
 
-    for i in range(0, input_neo.N_SPECIES - 1)
-        species = i + 1
-        setfield!(flux_solution, Symbol("PARTICLE_FLUX_$species"), tgyro_fluxes[2+(i*4)])
-        setfield!(flux_solution, Symbol("ENERGY_FLUX_$species"), tgyro_fluxes[3+(i*4)])
-        setfield!(flux_solution, Symbol("MOMENTUM_FLUX_$species"), tgyro_fluxes[4+(i*4)])
-    end
+    # sort fluxes
+    electrons_energy_flux = only(tgyro_fluxes[energy_index(e_index)])
+    electrons_particle_flux = only(tgyro_fluxes[particle_index(e_index)])
+    ion_particle_flux = tgyro_fluxes[particle_index(i_index)]
+    ion_total_energy_flux = sum(tgyro_fluxes[energy_index(i_index)])
+    ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
-    energy_flux_electrons = getfield(flux_solution, Symbol("ENERGY_FLUX_$(input_neo.N_SPECIES)")) # electrons are always the last species in the list
-    total_ion_energy_flux = -energy_flux_electrons # exclude electron energy flux from total ion energy flux
-    particle_flux_electrons = getfield(flux_solution, Symbol("PARTICLE_FLUX_$(input_neo.N_SPECIES)"))
-
-    for field in fieldnames(NEO.flux_solution)
-        if ismissing(getfield(flux_solution, field))
-            setfield!(flux_solution, field, 0.0)
-        end
-
-        if occursin("ENERGY", string(field))
-            total_ion_energy_flux += getfield(flux_solution, field)
-        end
-    end
-
-    total_fluxes = IMAS.flux_solution(particle_flux_electrons, 0.0, energy_flux_electrons, total_ion_energy_flux)
-
-    return total_fluxes
+    # assign fluxes to flux_solution structure
+    sol = IMAS.flux_solution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+    return sol
 end
 
 const document = Dict()

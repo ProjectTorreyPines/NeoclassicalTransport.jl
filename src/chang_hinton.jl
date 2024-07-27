@@ -6,6 +6,7 @@
         iion::Integer)
 
 Calculates the neoclassical flux using Chang-Hinton model which has been modified assuming Zi = 1, and ni=ne
+
 Ref: C.S. Chang, F.L. Hinton, Phys. Fluids 25, 1493–1494 (1982), https://doi.org/10.1063/1.863934
 """
 function changhinton(
@@ -103,6 +104,7 @@ function changhinton(
 
     qneo_gb = neo_rho_star_in^2
 
-    sol = IMAS.flux_solution(0.0, 0.0, 0.0, efluxi / qneo_gb)
+    # assign fluxes to flux_solution structure
+    sol = IMAS.flux_solution(0.0, efluxi / qneo_gb, 0.0, Float64[], 0.0)
     return sol
 end
