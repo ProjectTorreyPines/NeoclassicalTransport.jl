@@ -1,7 +1,7 @@
 name = "NEO"
 uuid = "081d0416-0f87-42c0-8034-5895805e76d8"
 authors = ["adrianaghiozzi <67669644+adrianaghiozzi@users.noreply.github.com>"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 IMAS = "13ead8c1-b7d1-41bb-a6d0-5b8b65ed587a"
