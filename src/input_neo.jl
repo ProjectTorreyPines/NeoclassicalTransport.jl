@@ -221,9 +221,7 @@ end
     InputNEO(dd::IMAS.dd, gridpoint_cp)
 
 Populates InputNEO structure with quantities from dd using NEO normalizations
-
 """
-
 function InputNEO(dd::IMAS.dd, gridpoint_cp)
     input_neo = InputNEO()
 
@@ -233,24 +231,22 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     cp1d = dd.core_profiles.profiles_1d[]
     ions = cp1d.ion
 
-    mp = IMAS.constants.m_p * 1e3 # g
-    me = IMAS.constants.m_e * 1e3
-
+    e = IMAS.gacode_units.e # statcoul
+    k = IMAS.gacode_units.k # erg/eV
+    mp = IMAS.gacode_units.mp # g
+    me = IMAS.gacode_units.me # g
+    md = 2 * mp # g
     m_to_cm = IMAS.gacode_units.m_to_cm
+    m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
 
-    e = IMAS.gacode_units.e # statcoul
-    k = IMAS.gacode_units.k # erg/eV
-
     temp_1 = ions[1].temperature
     T1 = temp_1[gridpoint_cp]
+    dens_1 = ions[1].density[gridpoint_cp] ./ m³_to_cm³
 
-    dens_1 = ions[1].density ./ 1e6
-    n1 = dens_1[gridpoint_cp]
-
-    dens_e = cp1d.electrons.density ./ 1e6
+    dens_e = cp1d.electrons.density ./ m³_to_cm³
     dlnnedr = -IMAS.calc_z(rmin ./ a, dens_e, :backward)
     ne = dens_e[gridpoint_cp]
     dlnnedr = dlnnedr[gridpoint_cp]
@@ -261,7 +257,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     dlntedr = dlntedr[gridpoint_cp]
 
     n_norm = ne
-    m_norm = 3.3452e-27 * 1e3 # mass of deuterium in grams
+    m_norm = md
     t_norm = Te
     v_norm = sqrt(k .* t_norm ./ m_norm)
 
@@ -275,15 +271,15 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     loglam = IMAS.lnΛ_ei(cp1d.electrons.density[gridpoint_cp], cp1d.electrons.temperature[gridpoint_cp])
     Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
     m1 = ions[1].element[1].a * mp
-    nu1 = @. sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / (sqrt(m1) * (k * temp_1)^1.5)
+    nu1 = sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / (sqrt(m1) * (k * temp_1)^1.5)
 
-    input_neo.NU_1 = (nu1/(v_norm./a))[gridpoint_cp]
+    input_neo.NU_1 = (nu1 / (v_norm ./ a))
 
-    w0 = -1 .* cp1d.rotation_frequency_tor_sonic
-    w0p = IMAS.gradient(rmin, w0)
+    w0 = -cp1d.rotation_frequency_tor_sonic[gridpoint_cp]
+    w0p = -IMAS.gradient(rmin, cp1d.rotation_frequency_tor_sonic)[gridpoint_cp]
 
-    input_neo.OMEGA_ROT = w0[gridpoint_cp] / (v_norm / a)
-    input_neo.OMEGA_ROT_DERIV = w0p[gridpoint_cp] * a^2 / v_norm
+    input_neo.OMEGA_ROT = w0 / (v_norm / a)
+    input_neo.OMEGA_ROT_DERIV = w0p * a^2 / v_norm
 
     ####################
 
@@ -334,7 +330,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
         Ti = Ti[gridpoint_cp]
         dlntidr = dlntidr[gridpoint_cp]
 
-        ni = ions[iion].density ./ 1e6 / n_norm
+        ni = ions[iion].density ./ m³_to_cm³ / n_norm
         dlnnidr = -IMAS.calc_z(rmin ./ a, ni, :backward)
         ni = ni[gridpoint_cp]
         dlnnidr = dlnnidr[gridpoint_cp]

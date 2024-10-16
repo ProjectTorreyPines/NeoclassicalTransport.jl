@@ -16,17 +16,23 @@ function changhinton(
     iion::Integer)
 
     eq1d = eqt.profiles_1d
+    ions = cp1d.ion
 
-    m_to_cm = 1e2
+    e = IMAS.gacode_units.e # statcoul
+    k = IMAS.gacode_units.k # erg/eV
+    mp = IMAS.gacode_units.mp # g
+    m_to_cm = IMAS.gacode_units.m_to_cm
+    m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
+
     Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
 
     rho_eq = eq1d.rho_tor_norm
     rho_cp = cp1d.grid.rho_tor_norm
     gridpoint_cp = argmin(abs.(rho_cp .- rho_fluxmatch))
 
-    ne = cp1d.electrons.density_thermal * 1e-6
+    ne = cp1d.electrons.density_thermal / m³_to_cm³
     Te = cp1d.electrons.temperature[gridpoint_cp]
-    Ti = cp1d.ion[iion].temperature
+    Ti = ions[iion].temperature
 
     Rmaj = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     rmin = IMAS.interp1d(rho_eq, 0.5 * (eq1d.r_outboard - eq1d.r_inboard)).(rho_cp)
@@ -43,10 +49,8 @@ function changhinton(
     dlnndr = dlnndr * a / m_to_cm
     Ti = Ti[gridpoint_cp]
     ne = ne[gridpoint_cp]
-    k = 1.6e-12
-    e = 4.8e-10
 
-    mi = 1.6726e-24 * cp1d.ion[iion].element[1].a
+    mi = ions[iion].element[1].a * mp
 
     c_s = sqrt(k * Te / mi)
     loglam = 24.0 - log(sqrt(ne / Te))
@@ -56,7 +60,7 @@ function changhinton(
     b0 = 0.31
     c0 = 0.74
 
-    Zi = IMAS.avgZ(cp1d.ion[iion].element[1].z_n, Ti)
+    Zi = IMAS.avgZ(ions[iion].element[1].z_n, Ti)
     alpha = Zi - 1.0
     nui = sqrt(2.0) * pi * ne * (Zi * e)^4 * loglam / sqrt(mi) / (k * Ti)^1.5
     nu = nui * a / c_s / sqrt(Ti / Ti) * (Ti / Te)^1.5
@@ -99,7 +103,7 @@ function changhinton(
     efluxi = (CH_I_div_psip^2
               *
               Ti / Te
-              * (cp1d.ion[iion].element[1].a / Zi^2 * neo_rho_star_in^2 * sqrt(eps) * nui_HH)
+              * (ions[iion].element[1].a / Zi^2 * neo_rho_star_in^2 * sqrt(eps) * nui_HH)
               * ((K2 + K1) * dlntdr + K1 * dlnndr))
 
     qneo_gb = neo_rho_star_in^2
