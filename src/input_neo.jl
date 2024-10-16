@@ -271,9 +271,9 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     loglam = IMAS.lnΛ_ei(cp1d.electrons.density[gridpoint_cp], cp1d.electrons.temperature[gridpoint_cp])
     Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
     m1 = ions[1].element[1].a * mp
-    nu1 = sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam / (sqrt(m1) * (k * temp_1)^1.5)
+    nu1 = sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam ./ (sqrt(m1) * (k * temp_1).^1.5)
 
-    input_neo.NU_1 = (nu1 / (v_norm ./ a))
+    input_neo.NU_1 = (nu1 ./ (v_norm ./ a))[gridpoint_cp]
 
     w0 = -cp1d.rotation_frequency_tor_sonic[gridpoint_cp]
     w0p = -IMAS.gradient(rmin, cp1d.rotation_frequency_tor_sonic)[gridpoint_cp]
