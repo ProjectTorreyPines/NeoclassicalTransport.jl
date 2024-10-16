@@ -16,7 +16,6 @@ end
 
 Populates equilibrium_geometry structure with equilibrium quantities from dd
 """
-
 function get_equilibrium_parameters(dd::IMAS.dd)
     equilibrium_geometry = NEO.equilibrium_geometry()
 
@@ -58,9 +57,8 @@ end
 """
     get_ion_electron_parameters(dd::IMAS.dd)
 
-Populates parameter_matrices structure with profile data from dd using NEO normalizations 
+Populates parameter_matrices structure with profile data from dd using NEO normalizations
 """
-
 function get_ion_electron_parameters(dd::IMAS.dd)
     parameter_matrices = NEO.parameter_matrices()
 
@@ -75,54 +73,55 @@ function get_ion_electron_parameters(dd::IMAS.dd)
 
     e = IMAS.gacode_units.e # statcoul
     k = IMAS.gacode_units.k # erg/eV
-    mp = IMAS.constants.m_p * 1e3 # g
-    md = 3.34358e-27 * 1e3
+    mp = IMAS.gacode_units.mp # g
+    me = IMAS.gacode_units.me # g
+    md = 2 * mp # g
+    m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
 
-    loglam = 24.0 .- log.(sqrt.(cp1d.electrons.density ./ 1e6) ./ (cp1d.electrons.temperature))
+    Te = cp1d.electrons.temperature # ev
+    ne = cp1d.electrons.density / m³_to_cm³ # cm^-3
 
-    n_norm = cp1d.electrons.density ./ 1e6
-    t_norm = cp1d.electrons.temperature
+    loglam = 24.0 .- log.(sqrt.(ne) ./ Te)
 
-    m_norm = 2.0
-    nu_norm = sqrt.(k .* cp1d.electrons.temperature ./ md) ./ a
+    n_norm = ne
+    m_norm = md
+    t_norm = Te
+    nu_norm = sqrt.(k .* Te ./ md) ./ a
 
     Z = Vector{Float64}(undef, num_ions + 1)
     mass = Vector{Float64}(undef, num_ions + 1)
-
     dens = zeros(Float64, n, num_ions + 1)
     temp = zeros(Float64, n, num_ions + 1)
     vth = zeros(Float64, n, num_ions + 1)
     nu = zeros(Float64, n, num_ions + 1)
     dlnndr = zeros(Float64, n, num_ions + 1)
     dlntdr = zeros(Float64, n, num_ions + 1)
-
     for i in 1:num_ions
-        Z[i] = cp1d.ion[i].element[1].z_n
-        mass[i] = cp1d.ion[i].element[1].a ./ m_norm
+        T1 = cp1d.ion[i].temperature[Int(ceil(end / 2))]
+        Z[i] = IMAS.avgZ(cp1d.ion[i].element[1].z_n, T1)
+        mass[i] = cp1d.ion[i].element[1].a * mp / m_norm
 
-        dens[:, i] = cp1d.ion[i].density ./ 1e6 ./ n_norm
+        dens[:, i] = cp1d.ion[i].density ./ m³_to_cm³ ./ n_norm
         temp[:, i] = cp1d.ion[i].temperature ./ t_norm
 
-        nu[:, i] = (@. sqrt(2) * pi * (cp1d.ion[i].density ./ 1e6) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
+        nu[:, i] =
+            (@. sqrt(2) * pi * (cp1d.ion[i].density ./ m³_to_cm³) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
 
         dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density, :backward)
         dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature, :backward)
 
-        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a ./ m_norm))
+        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a * mp / m_norm))
     end
 
     # tacking on electron parameters at the end 
     Z[end] = -1.0
-    mass[end] = 0.00054858 / m_norm # 0.00054858 is the mass of an electron in AMU
-    dens[:, end] = cp1d.electrons.density ./ 1e6 ./ n_norm
-    temp[:, end] = cp1d.electrons.temperature ./ t_norm
-
-    nu[:, end] = (@. sqrt(2) * pi * (cp1d.electrons.density ./ 1e6) * (Z[end] * e)^4.0 * loglam / sqrt(0.00054858 * mp) / (k .* cp1d.electrons.temperature)^1.5) ./ nu_norm
-
-    dlnndr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.density, :backward)
-    dlntdr[:, end] = -IMAS.calc_z(rmin / a, cp1d.electrons.temperature, :backward)
-
-    vth[:, end] = sqrt.((cp1d.electrons.temperature ./ t_norm) ./ (0.00054858 ./ m_norm))
+    mass[end] = me / md
+    dens[:, end] = ne ./ n_norm
+    temp[:, end] = Te ./ t_norm
+    nu[:, end] = (@. sqrt(2) * pi * ne * (Z[end] * e)^4.0 * loglam / sqrt(me) / (k .* Te)^1.5) ./ nu_norm
+    dlnndr[:, end] = -IMAS.calc_z(rmin / a, ne, :backward)
+    dlntdr[:, end] = -IMAS.calc_z(rmin / a, Te, :backward)
+    vth[:, end] = sqrt.((Te ./ t_norm) ./ (me ./ md))
 
     parameter_matrices.Z = Z
     parameter_matrices.mass = mass
@@ -199,8 +198,7 @@ function gauss_integ(
     ietype::Int,
     equilibrium_geometry::NEO.equilibrium_geometry,
     is_globalHS::Int,
-    ir_global::Int
-)
+    ir_global::Int)
 
     x0, w0 = gauss_legendre(0, 1, order)
 
