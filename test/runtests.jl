@@ -8,10 +8,11 @@ cp1d = dd.core_profiles.profiles_1d[]
 
 @testset "NEO" begin
     @testset "chang_hinton.jl" begin
-        rho_fluxmatch = 1
+        rho_fluxmatch = 0.5
         iion = 1
         works = try
-            NEO.changhinton(eqt, cp1d, rho_fluxmatch, iion)
+            sol = NEO.changhinton(eqt, cp1d, rho_fluxmatch, iion)
+            @test isapprox(sol.ENERGY_FLUX_i, 0.05211, rtol=0.10) 
             true
         catch
             false
@@ -26,7 +27,14 @@ cp1d = dd.core_profiles.profiles_1d[]
         equilibrium_geometry = NEO.get_equilibrium_parameters(dd)
 
         works = try
-            NEO.hirshmansigmar(ir, dd, parameter_matrices, equilibrium_geometry)
+            sol = NEO.hirshmansigmar(ir, dd, parameter_matrices, equilibrium_geometry)
+            @test isapprox(sol.PARTICLE_FLUX_e, 0.0005395, rtol=0.10)
+            @test isapprox(sol.PARTICLE_FLUX_i[1], 0.00032, rtol=0.10)
+            @test isapprox(sol.PARTICLE_FLUX_i[2], 0.000398, rtol=0.10)
+            @test isapprox(sol.PARTICLE_FLUX_i[3], -0.00015, rtol=0.10)
+            @test isapprox(sol.PARTICLE_FLUX_i[4], -1.232e-6, rtol=0.10)
+            @test isapprox(sol.ENERGY_FLUX_e, 0.002116, rtol=0.10)
+            @test isapprox(sol.ENERGY_FLUX_i, 0.0163, rtol=0.10)
             true
         catch
             false
