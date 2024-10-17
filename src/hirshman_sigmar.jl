@@ -75,7 +75,7 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     k = IMAS.gacode_units.k # erg/eV
     mp = IMAS.gacode_units.mp # g
     me = IMAS.gacode_units.me # g
-    md = 2 * mp # g
+    md = IMAS.gacode_units.md # g
     m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
 
     Te = cp1d.electrons.temperature # ev
