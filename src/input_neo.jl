@@ -257,9 +257,8 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     dlntedr = dlntedr[gridpoint_cp]
 
     n_norm = ne
-    m_norm = md
     t_norm = Te
-    v_norm = sqrt(k .* t_norm ./ m_norm)
+    v_norm = sqrt(k .* t_norm ./ md)
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
 
@@ -322,7 +321,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     for iion in eachindex(ions)
         species = iion
         setfield!(input_neo, Symbol("ANISO_MODEL_$species"), 1)
-        setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a .* mp / m_norm)
+        setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a .* mp / md)
         setfield!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
 
         Ti = ions[iion].temperature ./ t_norm
@@ -347,7 +346,7 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
             setfield!(input_neo, Symbol("DENS_$i"), ne / n_norm)
             setfield!(input_neo, Symbol("TEMP_$i"), Te / t_norm)
             setfield!(input_neo, Symbol("ANISO_MODEL_$i"), 1)
-            setfield!(input_neo, Symbol("MASS_$i"), me / m_norm)
+            setfield!(input_neo, Symbol("MASS_$i"), me / md)
             setfield!(input_neo, Symbol("Z_$i"), -1)
             setfield!(input_neo, Symbol("DLNNDR_$i"), dlnnedr)
             setfield!(input_neo, Symbol("DLNTDR_$i"), dlntedr)

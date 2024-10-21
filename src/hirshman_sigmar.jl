@@ -84,7 +84,6 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     loglam = 24.0 .- log.(sqrt.(ne) ./ Te)
 
     n_norm = ne
-    m_norm = md
     t_norm = Te
     nu_norm = sqrt.(k .* Te ./ md) ./ a
 
@@ -99,7 +98,7 @@ function get_ion_electron_parameters(dd::IMAS.dd)
     for i in 1:num_ions
         T1 = cp1d.ion[i].temperature[Int(ceil(end / 2))]
         Z[i] = IMAS.avgZ(cp1d.ion[i].element[1].z_n, T1)
-        mass[i] = cp1d.ion[i].element[1].a * mp / m_norm
+        mass[i] = cp1d.ion[i].element[1].a * mp / md
 
         dens[:, i] = cp1d.ion[i].density ./ m³_to_cm³ ./ n_norm
         temp[:, i] = cp1d.ion[i].temperature ./ t_norm
@@ -110,7 +109,7 @@ function get_ion_electron_parameters(dd::IMAS.dd)
         dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density, :backward)
         dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature, :backward)
 
-        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a * mp / m_norm))
+        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a * mp / md))
     end
 
     # tacking on electron parameters at the end 
