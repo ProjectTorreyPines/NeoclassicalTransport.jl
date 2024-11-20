@@ -18,11 +18,11 @@ function changhinton(
     eq1d = eqt.profiles_1d
     ions = cp1d.ion
 
-    e = IMAS.gacode_units.e # statcoul
-    k = IMAS.gacode_units.k # erg/eV
-    mp = IMAS.gacode_units.mp # g
-    m_to_cm = IMAS.gacode_units.m_to_cm
-    m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
+    e = IMAS.cgs.e # statcoul
+    k = IMAS.cgs.k # erg/eV
+    mp = IMAS.cgs.mp # g
+    m_to_cm = IMAS.cgs.m_to_cm
+    m³_to_cm³ = IMAS.cgs.m³_to_cm³
 
     Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
 

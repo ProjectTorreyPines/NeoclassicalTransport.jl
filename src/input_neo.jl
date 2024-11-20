@@ -231,13 +231,13 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     cp1d = dd.core_profiles.profiles_1d[]
     ions = cp1d.ion
 
-    e = IMAS.gacode_units.e # statcoul
-    k = IMAS.gacode_units.k # erg/eV
-    mp = IMAS.gacode_units.mp # g
-    me = IMAS.gacode_units.me # g
-    md = IMAS.gacode_units.md # g
-    m_to_cm = IMAS.gacode_units.m_to_cm
-    m³_to_cm³ = IMAS.gacode_units.m³_to_cm³
+    e = IMAS.cgs.e # statcoul
+    k = IMAS.cgs.k # erg/eV
+    mp = IMAS.cgs.mp # g
+    me = IMAS.cgs.me # g
+    md = IMAS.cgs.md # g
+    m_to_cm = IMAS.cgs.m_to_cm
+    m³_to_cm³ = IMAS.cgs.m³_to_cm³
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
