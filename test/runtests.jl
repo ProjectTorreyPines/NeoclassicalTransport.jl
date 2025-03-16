@@ -23,11 +23,11 @@ cp1d = dd.core_profiles.profiles_1d[]
     @testset "hirshman_sigmar.jl" begin 
         ir = 1
 
-        parameter_matrices = NEO.get_ion_electron_parameters(dd)
-        equilibrium_geometry = NEO.get_equilibrium_parameters(dd)
+        parameter_matrices = NEO.get_ion_electron_parameters(eqt, cp1d)
+        equilibrium_geometry = NEO.get_equilibrium_parameters(eqt, cp1d)
 
         works = try
-            sol = NEO.hirshmansigmar(ir, dd, parameter_matrices, equilibrium_geometry)
+            sol = NEO.hirshmansigmar(ir, eqt, cp1d, parameter_matrices, equilibrium_geometry)
             @test isapprox(sol.PARTICLE_FLUX_e, 0.0005395, rtol=0.10)
             @test isapprox(sol.PARTICLE_FLUX_i[1], 0.00032, rtol=0.10)
             @test isapprox(sol.PARTICLE_FLUX_i[2], 0.000398, rtol=0.10)
@@ -45,7 +45,7 @@ cp1d = dd.core_profiles.profiles_1d[]
     @testset "input_neo.jl" begin
         gridpoint_cp = 1 
         works = try
-            input_neo = NEO.InputNEO(dd, gridpoint_cp)
+            input_neo = NEO.InputNEO(eqt, cp1d, gridpoint_cp)
             true 
         catch
             false

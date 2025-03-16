@@ -218,17 +218,14 @@ Base.@kwdef mutable struct InputNEO
     THREED_EXB_MODEL::Union{Int,Missing} = missing
 end
 """
-    InputNEO(dd::IMAS.dd, gridpoint_cp)
+    InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, gridpoint_cp)
 
-Populates InputNEO structure with quantities from dd using NEO normalizations
+Populates InputNEO structure with quantities from eqt and cp1d using NEO normalizations
 """
-function InputNEO(dd::IMAS.dd, gridpoint_cp)
+function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, gridpoint_cp)
     input_neo = InputNEO()
 
-    eq = dd.equilibrium
-    eqt = eq.time_slice[]
     eq1d = eqt.profiles_1d
-    cp1d = dd.core_profiles.profiles_1d[]
     ions = cp1d.ion
 
     e = IMAS.cgs.e # statcoul
@@ -270,9 +267,9 @@ function InputNEO(dd::IMAS.dd, gridpoint_cp)
     loglam = IMAS.lnΛ_ei(cp1d.electrons.density[gridpoint_cp], cp1d.electrons.temperature[gridpoint_cp])
     Z1 = IMAS.avgZ(ions[1].element[1].z_n, T1)
     m1 = ions[1].element[1].a * mp
-    nu1 = sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam ./ (sqrt(m1) * (k * temp_1).^1.5)
+    nu1 = sqrt(2) * pi * dens_1 * Z1^4.0 * e^4.0 * loglam ./ (sqrt(m1) * (k * temp_1) .^ 1.5)
 
-    input_neo.NU_1 = (nu1 ./ (v_norm ./ a))[gridpoint_cp]
+    input_neo.NU_1 = (nu1./(v_norm./a))[gridpoint_cp]
 
     w0 = -cp1d.rotation_frequency_tor_sonic[gridpoint_cp]
     w0p = -IMAS.gradient(rmin, cp1d.rotation_frequency_tor_sonic)[gridpoint_cp]

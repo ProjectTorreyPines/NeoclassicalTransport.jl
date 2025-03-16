@@ -12,23 +12,21 @@ Base.@kwdef mutable struct parameter_matrices
 end
 
 """
-    get_equilibrium_parameters(dd::IMAS.dd)
+    get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
-Populates equilibrium_geometry structure with equilibrium quantities from dd
+Populates equilibrium_geometry structure with equilibrium quantities from eqt
 """
-function get_equilibrium_parameters(dd::IMAS.dd)
+function get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     equilibrium_geometry = NEO.equilibrium_geometry()
 
-    eqt = dd.equilibrium.time_slice[]
-    eq1d = eqt.profiles_1d
-    cp1d = dd.core_profiles.profiles_1d[]
+    eqt1d = eqt.profiles_1d
 
     m_to_cm = IMAS.cgs.m_to_cm
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
-    rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
-    q = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
+    rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
+    q = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(cp1d.grid.rho_tor_norm)
 
     ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
 
@@ -36,10 +34,10 @@ function get_equilibrium_parameters(dd::IMAS.dd)
     bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
     Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^ 2
-    Bmag2_avg = IMAS.interp1d(eq1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
+    Bmag2_avg = IMAS.interp1d(eqt1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
 
-    f_cp = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.f).(cp1d.grid.rho_tor_norm)
-    bunit_cp = IMAS.interp1d(eq1d.rho_tor_norm, IMAS.bunit(eqt)).(cp1d.grid.rho_tor_norm)
+    f_cp = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.f).(cp1d.grid.rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, IMAS.bunit(eqt1d)).(cp1d.grid.rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
     equilibrium_geometry.rmin = rmin
@@ -51,19 +49,16 @@ function get_equilibrium_parameters(dd::IMAS.dd)
     equilibrium_geometry.f = f
 
     return equilibrium_geometry
-
 end
 
 """
-    get_ion_electron_parameters(dd::IMAS.dd)
+    get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
-Populates parameter_matrices structure with profile data from dd using NEO normalizations
+Populates parameter_matrices structure with profile data from cp1d using NEO normalizations
 """
-function get_ion_electron_parameters(dd::IMAS.dd)
+function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     parameter_matrices = NEO.parameter_matrices()
 
-    eqt = dd.equilibrium.time_slice[]
-    cp1d = dd.core_profiles.profiles_1d[]
     n = length(cp1d.grid.rho_tor_norm)
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
@@ -292,7 +287,13 @@ function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, iet
     return out
 end
 
-function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
+function compute_HS(
+    ir::Int,
+    eqt::IMAS.equilibrium__time_slice,
+    cp1d::IMAS.core_profiles__profiles_1d,
+    parameter_matrices::NEO.parameter_matrices,
+    equilibrium_geometry::NEO.equilibrium_geometry
+)
     rmin = equilibrium_geometry.rmin
     a = equilibrium_geometry.a
     q = equilibrium_geometry.q
@@ -307,9 +308,6 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
     dlnndr = parameter_matrices.dlnndr
     dlntdr = parameter_matrices.dlntdr
 
-    eqt = dd.equilibrium.time_slice[]
-    cp1d = dd.core_profiles.profiles_1d[]
-
     n_species = length(cp1d.ion) + 1
 
     rho = IMAS.rho_s(cp1d, eqt) ./ a
@@ -322,8 +320,6 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
     nux0 = zeros(Float64, n_species)
     nux2 = zeros(Float64, n_species)
     nux4 = zeros(Float64, n_species)
-
-    cp1d = dd.core_profiles.profiles_1d[]
 
     for is_global in 1:n_species
         for ietype in 1:3
@@ -361,7 +357,6 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
             (Z[is_global] * Z[is_global] * 1.0)
 
         for js in 1:n_species
-
             L_b = nux0[js] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[ir, js] * temp[ir, js] * mass[js] / (Z[js] * Z[js] * 1.0)
 
             if is_global == js
@@ -375,12 +370,10 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
                 L12 = (nux2[js] / nux0[js]) * L11
                 L21 = (nux2[is_global] / nux0[is_global]) * Z[js] / (1.0 * Z[is_global]) * (mass[is_global] * dens[ir, is_global] * nux0[is_global] / sum_nm) * L_b
                 L22 = (nux2[is_global] / nux0[is_global]) * L12
-
             end
 
             pflux_multi[is_global] += L11 * A1 + L12 * A2
             eflux_multi[is_global] += L21 * A1 + L22 * A2
-
         end
     end
 
@@ -388,11 +381,8 @@ function compute_HS(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matr
 
 end
 
-function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, dd::IMAS.dd, rho::Int)
+function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int)
     pflux_multi, eflux_multi = HS_solution
-
-    eqt = dd.equilibrium.time_slice[]
-    cp1d = dd.core_profiles.profiles_1d[]
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
     a = rmin[end]
@@ -419,12 +409,18 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, dd::IMAS.
 end
 
 """
-    hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
+    hirshmansigmar(ir::Int, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
 
 Calculates neoclassical fluxes according to Hirshman-Sigmar model
 Ref: S.P. Hirshman, D.J. Sigmar, J.F. Clarke, Phys. Fluids 19, 656–666 (1976), https://doi.org/10.1063/1.861524
 """
-function hirshmansigmar(ir::Int, dd::IMAS.dd, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
-    hs = compute_HS(ir, dd, parameter_matrices, equilibrium_geometry)
-    return HS_to_GB(hs, dd, ir)
+function hirshmansigmar(
+    ir::Int,
+    eqt::IMAS.equilibrium__time_slice,
+    cp1d::IMAS.core_profiles__profiles_1d,
+    parameter_matrices::NEO.parameter_matrices,
+    equilibrium_geometry::NEO.equilibrium_geometry
+)
+    hs = compute_HS(ir, eqt, cp1d, parameter_matrices, equilibrium_geometry)
+    return HS_to_GB(hs, eqt, cp1d, ir)
 end
