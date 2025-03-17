@@ -17,8 +17,8 @@ cp1d = dd.core_profiles.profiles_1d[];
     @testset "hirshman_sigmar.jl" begin
         ir = 1
 
-        parameter_matrices = NEO.get_ion_electron_parameters(eqt, cp1d)
-        equilibrium_geometry = NEO.get_equilibrium_parameters(eqt, cp1d)
+        parameter_matrices = NEO.get_plasma_profiles(eqt, cp1d)
+        equilibrium_geometry = NEO.get_equilibrium_geometry(eqt, cp1d)
 
         sol = NEO.hirshmansigmar(ir, eqt, cp1d, parameter_matrices, equilibrium_geometry)
         @test isapprox(sol.PARTICLE_FLUX_e, 0.0005395, rtol=0.10)

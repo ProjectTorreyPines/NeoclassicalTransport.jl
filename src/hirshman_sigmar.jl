@@ -23,11 +23,11 @@ Base.@kwdef mutable struct EquilibriumGeometry{T}
 end
 
 """
-    get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+    get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
 Populates EquilibriumGeometry structure with equilibrium quantities from eqt
 """
-function get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     eqt1d = eqt.profiles_1d
 
     m_to_cm = IMAS.cgs.m_to_cm
@@ -56,11 +56,11 @@ function get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMA
 end
 
 """
-    get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+    get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
 Populates plasma_profiles structure with profile data from cp1d using NEO normalizations
 """
-function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     n = length(cp1d.grid.rho_tor_norm)
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
