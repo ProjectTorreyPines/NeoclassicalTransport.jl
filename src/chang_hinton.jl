@@ -108,7 +108,7 @@ function changhinton(
 
     qneo_gb = neo_rho_star_in^2
 
-    # assign fluxes to flux_solution structure
-    sol = IMAS.flux_solution(0.0, efluxi / qneo_gb, 0.0, Float64[], 0.0)
+    # assign fluxes to FluxSolution structure
+    sol = IMAS.FluxSolution(0.0, efluxi / qneo_gb, 0.0, Float64[], 0.0)
     return sol
 end

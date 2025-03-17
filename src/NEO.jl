@@ -1,61 +1,5 @@
 module NEO
 
-Base.@kwdef mutable struct flux_solution
-    PARTICLE_FLUX_1::Union{Float64,Missing} = missing
-    ENERGY_FLUX_1::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_1::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_2::Union{Float64,Missing} = missing
-    ENERGY_FLUX_2::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_2::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_3::Union{Float64,Missing} = missing
-    ENERGY_FLUX_3::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_3::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_4::Union{Float64,Missing} = missing
-    ENERGY_FLUX_4::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_4::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_5::Union{Float64,Missing} = missing
-    ENERGY_FLUX_5::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_5::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_6::Union{Float64,Missing} = missing
-    ENERGY_FLUX_6::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_6::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_7::Union{Float64,Missing} = missing
-    ENERGY_FLUX_7::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_7::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_8::Union{Float64,Missing} = missing
-    ENERGY_FLUX_8::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_8::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_9::Union{Float64,Missing} = missing
-    ENERGY_FLUX_9::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_9::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_10::Union{Float64,Missing} = missing
-    ENERGY_FLUX_10::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_10::Union{Float64,Missing} = missing
-
-    PARTICLE_FLUX_11::Union{Float64,Missing} = missing
-    ENERGY_FLUX_11::Union{Float64,Missing} = missing
-    MOMENTUM_FLUX_11::Union{Float64,Missing} = missing
-end
-
-Base.@kwdef mutable struct equilibrium_geometry
-    rmin::Union{Vector{Float64},Missing} = missing
-    rmaj::Union{Vector{Float64},Missing} = missing
-    a::Union{Float64,Missing} = missing
-    q::Union{Vector{Float64},Missing} = missing
-    ftrap::Union{Vector{Float64},Missing} = missing
-    Bmag2_avg::Union{Vector{Float64},Missing} = missing
-    f::Union{Vector{Float64},Missing} = missing
-end
-
 include("input_neo.jl")
 
 include("hirshman_sigmar.jl")
@@ -112,8 +56,8 @@ function run_neo(input_neo::InputNEO)
     ion_total_energy_flux = sum(tgyro_fluxes[energy_index(i_index)])
     ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
-    # assign fluxes to flux_solution structure
-    sol = IMAS.flux_solution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+    # assign fluxes to FluxSolution structure
+    sol = IMAS.FluxSolution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
     return sol
 end
 

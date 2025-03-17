@@ -1,24 +1,33 @@
 using SpecialFunctions
 
-Base.@kwdef mutable struct parameter_matrices
-    Z::Union{Vector{Float64},Missing} = missing
-    mass::Union{Vector{Float64},Missing} = missing
-    dens::Union{Matrix{Float64},Missing} = missing
-    temp::Union{Matrix{Float64},Missing} = missing
-    nu::Union{Matrix{Float64},Missing} = missing
-    dlnndr::Union{Matrix{Float64},Missing} = missing
-    dlntdr::Union{Matrix{Float64},Missing} = missing
-    vth::Union{Matrix{Float64},Missing} = missing
+Base.@kwdef mutable struct ParametersMatrices{T}
+    Z::Vector{T}
+    mass::Vector{T}
+    dens::Matrix{T}
+    temp::Matrix{T}
+    nu::Matrix{T}
+    dlnndr::Matrix{T}
+    dlntdr::Matrix{T}
+    vth::Matrix{T}
+end
+
+Base.@kwdef mutable struct EquilibriumGeometry{T}
+    time::Float64
+    rmin::Vector{T}
+    rmaj::Vector{T}
+    a::T
+    q::Vector{T}
+    ftrap::Vector{T}
+    Bmag2_avg::Vector{T}
+    f::Vector{T}
 end
 
 """
     get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
-Populates equilibrium_geometry structure with equilibrium quantities from eqt
+Populates EquilibriumGeometry structure with equilibrium quantities from eqt
 """
 function get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
-    equilibrium_geometry = NEO.equilibrium_geometry()
-
     eqt1d = eqt.profiles_1d
 
     m_to_cm = IMAS.cgs.m_to_cm
@@ -40,13 +49,8 @@ function get_equilibrium_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMA
     bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, IMAS.bunit(eqt1d)).(cp1d.grid.rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
-    equilibrium_geometry.rmin = rmin
-    equilibrium_geometry.rmaj = rmaj
-    equilibrium_geometry.a = a
-    equilibrium_geometry.q = q
-    equilibrium_geometry.ftrap = ftrap
-    equilibrium_geometry.Bmag2_avg = Bmag2_avg
-    equilibrium_geometry.f = f
+    time = eqt.time
+    equilibrium_geometry = EquilibriumGeometry(; time, rmin, rmaj, a, q, ftrap, Bmag2_avg, f)
 
     return equilibrium_geometry
 end
@@ -54,11 +58,9 @@ end
 """
     get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
-Populates parameter_matrices structure with profile data from cp1d using NEO normalizations
+Populates parameters_matrices structure with profile data from cp1d using NEO normalizations
 """
 function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
-    parameter_matrices = NEO.parameter_matrices()
-
     n = length(cp1d.grid.rho_tor_norm)
 
     rmin = IMAS.r_min_core_profiles(cp1d, eqt)
@@ -117,16 +119,9 @@ function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IM
     dlntdr[:, end] = -IMAS.calc_z(rmin / a, Te, :backward)
     vth[:, end] = sqrt.((Te ./ t_norm) ./ (me ./ md))
 
-    parameter_matrices.Z = Z
-    parameter_matrices.mass = mass
-    parameter_matrices.dens = dens
-    parameter_matrices.temp = temp
-    parameter_matrices.nu = nu
-    parameter_matrices.dlnndr = dlnndr
-    parameter_matrices.dlntdr = dlntdr
-    parameter_matrices.vth = vth
+    parameters_matrices = ParametersMatrices(;Z, mass, dens, temp, nu, dlnndr, dlntdr, vth)
 
-    return parameter_matrices
+    return parameters_matrices
 end
 
 function gauss_legendre(x1::Int, x2::Int, n::Int)
@@ -188,9 +183,9 @@ function gauss_integ(
     func::Function,
     order::Int,
     n_subdiv::Int,
-    parameter_matrices::NEO.parameter_matrices,
+    parameters_matrices::ParametersMatrices,
     ietype::Int,
-    equilibrium_geometry::NEO.equilibrium_geometry,
+    equilibrium_geometry::EquilibriumGeometry,
     is_globalHS::Int,
     ir_global::Int)
 
@@ -213,16 +208,16 @@ function gauss_integ(
 
     answer = 0.0
     for p in 1:n_node
-        answer = answer + w[p] * func(x[p], parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
+        answer = answer + w[p] * func(x[p], parameters_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
     end
 
     return answer
 end
 
-function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, parameter_matrices::NEO.parameter_matrices)
-    Z = parameter_matrices.Z
-    dens = parameter_matrices.dens
-    vth = parameter_matrices.vth
+function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, parameters_matrices::ParametersMatrices)
+    Z = parameters_matrices.Z
+    dens = parameters_matrices.dens
+    vth = parameters_matrices.vth
 
     fac = @views (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[ir_loc, js_loc] / dens[ir_loc, is_loc])
 
@@ -246,15 +241,15 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
     return nu_d
 end
 
-function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, ietype::Int, equilibrium_geometry::NEO.equilibrium_geometry, is_globalHS::Int, ir_global::Int)
+function myHSenefunc(x::Float64, parameters_matrices::ParametersMatrices, ietype::Int, equilibrium_geometry::EquilibriumGeometry, is_globalHS::Int, ir_global::Int)
     rmin = equilibrium_geometry.rmin
     rmaj = equilibrium_geometry.rmaj
     a = equilibrium_geometry.a
     q = equilibrium_geometry.q
     ftrap = equilibrium_geometry.ftrap
 
-    nu = parameter_matrices.nu
-    vth = parameter_matrices.vth
+    nu = parameters_matrices.nu
+    vth = parameters_matrices.vth
 
     emin = 0.0
     emax = 16.0
@@ -268,8 +263,8 @@ function myHSenefunc(x::Float64, parameter_matrices::NEO.parameter_matrices, iet
     eps = rmin[ir_global] / (rmaj[ir_global] .* a)
 
     nu_d_tot = 0.0
-    for js in eachindex(parameter_matrices.Z)
-        nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameter_matrices)
+    for js in eachindex(parameters_matrices.Z)
+        nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameters_matrices)
         nu_d_tot += nu_d * nu[ir_global, is_globalHS]
     end
 
@@ -291,8 +286,8 @@ function compute_HS(
     ir::Int,
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
-    parameter_matrices::NEO.parameter_matrices,
-    equilibrium_geometry::NEO.equilibrium_geometry
+    parameters_matrices::ParametersMatrices,
+    equilibrium_geometry::EquilibriumGeometry
 )
     rmin = equilibrium_geometry.rmin
     a = equilibrium_geometry.a
@@ -301,12 +296,12 @@ function compute_HS(
     Bmag2_avg = equilibrium_geometry.Bmag2_avg
     f = equilibrium_geometry.f
 
-    Z = parameter_matrices.Z
-    mass = parameter_matrices.mass
-    dens = parameter_matrices.dens
-    temp = parameter_matrices.temp
-    dlnndr = parameter_matrices.dlnndr
-    dlntdr = parameter_matrices.dlntdr
+    Z = parameters_matrices.Z
+    mass = parameters_matrices.mass
+    dens = parameters_matrices.dens
+    temp = parameters_matrices.temp
+    dlnndr = parameters_matrices.dlnndr
+    dlntdr = parameters_matrices.dlntdr
 
     n_species = length(cp1d.ion) + 1
 
@@ -326,7 +321,7 @@ function compute_HS(
             ir_global = ir
             is_globalHS = is_global
 
-            eii_val = gauss_integ(-1.0, 1.0, NEO.myHSenefunc, integ_order, Nx, parameter_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
+            eii_val = gauss_integ(-1.0, 1.0, myHSenefunc, integ_order, Nx, parameters_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
 
             if ietype == 1
                 nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
@@ -403,13 +398,13 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     particle_flux_e = pflux_norm[end]
     particle_flux_i = pflux_norm[1:end-1]
 
-    # assign fluxes to flux_solution structure
-    sol = IMAS.flux_solution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
+    # assign fluxes to FluxSolution structure
+    sol = IMAS.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
     return sol
 end
 
 """
-    hirshmansigmar(ir::Int, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, parameter_matrices::NEO.parameter_matrices, equilibrium_geometry::NEO.equilibrium_geometry)
+    hirshmansigmar(ir::Int, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, parameters_matrices::ParametersMatrices, equilibrium_geometry::EquilibriumGeometry)
 
 Calculates neoclassical fluxes according to Hirshman-Sigmar model
 Ref: S.P. Hirshman, D.J. Sigmar, J.F. Clarke, Phys. Fluids 19, 656–666 (1976), https://doi.org/10.1063/1.861524
@@ -418,9 +413,9 @@ function hirshmansigmar(
     ir::Int,
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
-    parameter_matrices::NEO.parameter_matrices,
-    equilibrium_geometry::NEO.equilibrium_geometry
+    parameters_matrices::ParametersMatrices,
+    equilibrium_geometry::EquilibriumGeometry
 )
-    hs = compute_HS(ir, eqt, cp1d, parameter_matrices, equilibrium_geometry)
+    hs = compute_HS(ir, eqt, cp1d, parameters_matrices, equilibrium_geometry)
     return HS_to_GB(hs, eqt, cp1d, ir)
 end
