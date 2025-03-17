@@ -1,6 +1,6 @@
 using SpecialFunctions
 
-Base.@kwdef mutable struct ParametersMatrices{T}
+Base.@kwdef mutable struct PlasmaProfiles{T}
     Z::Vector{T}
     mass::Vector{T}
     dens::Matrix{T}
@@ -58,7 +58,7 @@ end
 """
     get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
 
-Populates parameters_matrices structure with profile data from cp1d using NEO normalizations
+Populates plasma_profiles structure with profile data from cp1d using NEO normalizations
 """
 function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     n = length(cp1d.grid.rho_tor_norm)
@@ -119,9 +119,9 @@ function get_ion_electron_parameters(eqt::IMAS.equilibrium__time_slice, cp1d::IM
     dlntdr[:, end] = -IMAS.calc_z(rmin / a, Te, :backward)
     vth[:, end] = sqrt.((Te ./ t_norm) ./ (me ./ md))
 
-    parameters_matrices = ParametersMatrices(;Z, mass, dens, temp, nu, dlnndr, dlntdr, vth)
+    plasma_profiles = PlasmaProfiles(;Z, mass, dens, temp, nu, dlnndr, dlntdr, vth)
 
-    return parameters_matrices
+    return plasma_profiles
 end
 
 function gauss_legendre(x1::Int, x2::Int, n::Int)
@@ -183,7 +183,7 @@ function gauss_integ(
     func::Function,
     order::Int,
     n_subdiv::Int,
-    parameters_matrices::ParametersMatrices,
+    plasma_profiles::PlasmaProfiles,
     ietype::Int,
     equilibrium_geometry::EquilibriumGeometry,
     is_globalHS::Int,
@@ -208,16 +208,16 @@ function gauss_integ(
 
     answer = 0.0
     for p in 1:n_node
-        answer = answer + w[p] * func(x[p], parameters_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
+        answer = answer + w[p] * func(x[p], plasma_profiles, ietype, equilibrium_geometry, is_globalHS, ir_global)
     end
 
     return answer
 end
 
-function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, parameters_matrices::ParametersMatrices)
-    Z = parameters_matrices.Z
-    dens = parameters_matrices.dens
-    vth = parameters_matrices.vth
+function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, plasma_profiles::PlasmaProfiles)
+    Z = plasma_profiles.Z
+    dens = plasma_profiles.dens
+    vth = plasma_profiles.vth
 
     fac = @views (1.0 * Z[js_loc])^2 / (1.0 * Z[is_loc])^2 * (dens[ir_loc, js_loc] / dens[ir_loc, is_loc])
 
@@ -241,15 +241,15 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, par
     return nu_d
 end
 
-function myHSenefunc(x::Float64, parameters_matrices::ParametersMatrices, ietype::Int, equilibrium_geometry::EquilibriumGeometry, is_globalHS::Int, ir_global::Int)
+function myHSenefunc(x::Float64, plasma_profiles::PlasmaProfiles, ietype::Int, equilibrium_geometry::EquilibriumGeometry, is_globalHS::Int, ir_global::Int)
     rmin = equilibrium_geometry.rmin
     rmaj = equilibrium_geometry.rmaj
     a = equilibrium_geometry.a
     q = equilibrium_geometry.q
     ftrap = equilibrium_geometry.ftrap
 
-    nu = parameters_matrices.nu
-    vth = parameters_matrices.vth
+    nu = plasma_profiles.nu
+    vth = plasma_profiles.vth
 
     emin = 0.0
     emax = 16.0
@@ -263,8 +263,8 @@ function myHSenefunc(x::Float64, parameters_matrices::ParametersMatrices, ietype
     eps = rmin[ir_global] / (rmaj[ir_global] .* a)
 
     nu_d_tot = 0.0
-    for js in eachindex(parameters_matrices.Z)
-        nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, parameters_matrices)
+    for js in eachindex(plasma_profiles.Z)
+        nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, plasma_profiles)
         nu_d_tot += nu_d * nu[ir_global, is_globalHS]
     end
 
@@ -286,7 +286,7 @@ function compute_HS(
     ir::Int,
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
-    parameters_matrices::ParametersMatrices,
+    plasma_profiles::PlasmaProfiles,
     equilibrium_geometry::EquilibriumGeometry
 )
     rmin = equilibrium_geometry.rmin
@@ -296,12 +296,12 @@ function compute_HS(
     Bmag2_avg = equilibrium_geometry.Bmag2_avg
     f = equilibrium_geometry.f
 
-    Z = parameters_matrices.Z
-    mass = parameters_matrices.mass
-    dens = parameters_matrices.dens
-    temp = parameters_matrices.temp
-    dlnndr = parameters_matrices.dlnndr
-    dlntdr = parameters_matrices.dlntdr
+    Z = plasma_profiles.Z
+    mass = plasma_profiles.mass
+    dens = plasma_profiles.dens
+    temp = plasma_profiles.temp
+    dlnndr = plasma_profiles.dlnndr
+    dlntdr = plasma_profiles.dlntdr
 
     n_species = length(cp1d.ion) + 1
 
@@ -321,7 +321,7 @@ function compute_HS(
             ir_global = ir
             is_globalHS = is_global
 
-            eii_val = gauss_integ(-1.0, 1.0, myHSenefunc, integ_order, Nx, parameters_matrices, ietype, equilibrium_geometry, is_globalHS, ir_global)
+            eii_val = gauss_integ(-1.0, 1.0, myHSenefunc, integ_order, Nx, plasma_profiles, ietype, equilibrium_geometry, is_globalHS, ir_global)
 
             if ietype == 1
                 nux0[is_global] = eii_val * 4.0 / (3.0 * sqrt(pi))
@@ -404,7 +404,7 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
 end
 
 """
-    hirshmansigmar(ir::Int, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, parameters_matrices::ParametersMatrices, equilibrium_geometry::EquilibriumGeometry)
+    hirshmansigmar(ir::Int, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, plasma_profiles::PlasmaProfiles, equilibrium_geometry::EquilibriumGeometry)
 
 Calculates neoclassical fluxes according to Hirshman-Sigmar model
 Ref: S.P. Hirshman, D.J. Sigmar, J.F. Clarke, Phys. Fluids 19, 656–666 (1976), https://doi.org/10.1063/1.861524
@@ -413,9 +413,9 @@ function hirshmansigmar(
     ir::Int,
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
-    parameters_matrices::ParametersMatrices,
+    plasma_profiles::PlasmaProfiles,
     equilibrium_geometry::EquilibriumGeometry
 )
-    hs = compute_HS(ir, eqt, cp1d, parameters_matrices, equilibrium_geometry)
+    hs = compute_HS(ir, eqt, cp1d, plasma_profiles, equilibrium_geometry)
     return HS_to_GB(hs, eqt, cp1d, ir)
 end
