@@ -30,29 +30,27 @@ Populates EquilibriumGeometry structure with equilibrium quantities from eqt
 function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     eqt1d = eqt.profiles_1d
 
+    rho_tor_norm = cp1d.grid.rho_tor_norm
     m_to_cm = IMAS.cgs.m_to_cm
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    rmin = IMAS.r_min_core_profiles(eqt1d, rho_tor_norm)
     a = rmin[end]
-    rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(cp1d.grid.rho_tor_norm) ./ a
-    q = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(cp1d.grid.rho_tor_norm)
+    rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(rho_tor_norm) ./ a
+    q = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(rho_tor_norm)
 
-    ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(cp1d.grid.rho_tor_norm)
+    ftrap = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.trapped_fraction).(rho_tor_norm)
 
     rmin_eqt = 0.5 * (eqt.profiles_1d.r_outboard - eqt.profiles_1d.r_inboard)
     bunit_eqt = IMAS.gradient(2 * pi * rmin_eqt, eqt.profiles_1d.phi) ./ rmin_eqt
 
     Bmag2_avg_eq = eqt.profiles_1d.gm5 ./ bunit_eqt .^ 2
-    Bmag2_avg = IMAS.interp1d(eqt1d.rho_tor_norm, Bmag2_avg_eq).(cp1d.grid.rho_tor_norm)
+    Bmag2_avg = IMAS.interp1d(eqt1d.rho_tor_norm, Bmag2_avg_eq).(rho_tor_norm)
 
-    f_cp = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.f).(cp1d.grid.rho_tor_norm)
-    bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, IMAS.bunit(eqt1d)).(cp1d.grid.rho_tor_norm)
+    f_cp = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.f).(rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, IMAS.bunit(eqt1d)).(rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
-    time = eqt.time
-    equilibrium_geometry = EquilibriumGeometry(; time, rmin, rmaj, a, q, ftrap, Bmag2_avg, f)
-
-    return equilibrium_geometry
+    return EquilibriumGeometry(; eqt.time, rmin, rmaj, a, q, ftrap, Bmag2_avg, f)
 end
 
 """
@@ -63,7 +61,8 @@ Populates plasma_profiles structure with profile data from cp1d using NEO normal
 function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
     n = length(cp1d.grid.rho_tor_norm)
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    eqt1d = eqt.profiles_1d
+    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
     num_ions = length(cp1d.ion)
@@ -379,7 +378,8 @@ end
 function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int)
     pflux_multi, eflux_multi = HS_solution
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    eqt1d = eqt.profiles_1d
+    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
     neo_rho_star = (IMAS.rho_s(cp1d, eqt)./a)[rho]

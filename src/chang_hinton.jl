@@ -1,6 +1,6 @@
 """
     changhinton(
-        eq1d::IMAS.equilibrium__time_slice___profiles_1d, 
+        eqt1d::IMAS.equilibrium__time_slice___profiles_1d, 
         cp1d::IMAS.core_profiles__profiles_1d,
         rho_fluxmatch::Real,
         iion::Integer)
@@ -15,7 +15,7 @@ function changhinton(
     rho_fluxmatch::Real,
     iion::Integer)
 
-    eq1d = eqt.profiles_1d
+    eqt1d = eqt.profiles_1d
     ions = cp1d.ion
 
     e = IMAS.cgs.e # statcoul
@@ -24,9 +24,9 @@ function changhinton(
     m_to_cm = IMAS.cgs.m_to_cm
     m³_to_cm³ = IMAS.cgs.m³_to_cm³
 
-    Rmaj0 = eq1d.geometric_axis.r[1] * m_to_cm
+    Rmaj0 = eqt1d.geometric_axis.r[1] * m_to_cm
 
-    rho_eq = eq1d.rho_tor_norm
+    rho_eq = eqt1d.rho_tor_norm
     rho_cp = cp1d.grid.rho_tor_norm
     gridpoint_cp = argmin(abs.(rho_cp .- rho_fluxmatch))
 
@@ -34,13 +34,13 @@ function changhinton(
     Te = cp1d.electrons.temperature[gridpoint_cp]
     Ti = ions[iion].temperature
 
-    Rmaj = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
-    rmin = IMAS.interp1d(rho_eq, 0.5 * (eq1d.r_outboard - eq1d.r_inboard)).(rho_cp)
+    Rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(cp1d.grid.rho_tor_norm)
+    rmin = IMAS.interp1d(rho_eq, 0.5 * (eqt1d.r_outboard - eqt1d.r_inboard)).(rho_cp)
     drmaj = IMAS.gradient(rmin, Rmaj)
     shift = -drmaj[gridpoint_cp]
 
     eps = rmin[gridpoint_cp] * m_to_cm / Rmaj0
-    q = IMAS.interp1d(rho_eq, eq1d.q).(rho_cp)[gridpoint_cp]
+    q = IMAS.interp1d(rho_eq, eqt1d.q).(rho_cp)[gridpoint_cp]
 
     a = eqt.boundary.minor_radius * m_to_cm
     dlntdr = -IMAS.gradient(rmin, Ti)[gridpoint_cp] / Ti[gridpoint_cp]

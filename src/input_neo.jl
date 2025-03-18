@@ -225,7 +225,7 @@ Populates InputNEO structure with quantities from eqt and cp1d using NEO normali
 function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, gridpoint_cp)
     input_neo = InputNEO()
 
-    eq1d = eqt.profiles_1d
+    eqt1d = eqt.profiles_1d
     ions = cp1d.ion
 
     e = IMAS.cgs.e # statcoul
@@ -236,7 +236,7 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
     m_to_cm = IMAS.cgs.m_to_cm
     m³_to_cm³ = IMAS.cgs.m³_to_cm³
 
-    rmin = IMAS.r_min_core_profiles(cp1d, eqt)
+    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
     temp_1 = ions[1].temperature
@@ -259,9 +259,9 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
 
     input_neo.RMIN_OVER_A = rmin[gridpoint_cp] / a
 
-    input_neo.DELTA = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_cp]
+    input_neo.DELTA = IMAS.interp1d(eqt1d.rho_tor_norm, 0.5 * (eqt1d.triangularity_lower + eqt1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)[gridpoint_cp]
 
-    kappa = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.elongation).(cp1d.grid.rho_tor_norm)
+    kappa = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.elongation).(cp1d.grid.rho_tor_norm)
     input_neo.KAPPA = kappa[gridpoint_cp]
 
     loglam = IMAS.lnΛ_ei(cp1d.electrons.density[gridpoint_cp], cp1d.electrons.temperature[gridpoint_cp])
@@ -279,16 +279,16 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
 
     ####################
 
-    q_profile = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.q).(cp1d.grid.rho_tor_norm)
+    q_profile = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(cp1d.grid.rho_tor_norm)
     q = q_profile[gridpoint_cp]
     input_neo.Q = abs(q)
 
     input_neo.RHO_STAR = IMAS.rho_s(cp1d, eqt)[gridpoint_cp] / a
 
-    Rmaj = IMAS.interp1d(eq1d.rho_tor_norm, m_to_cm * 0.5 * (eq1d.r_outboard .+ eq1d.r_inboard)).(cp1d.grid.rho_tor_norm)
+    Rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     input_neo.RMAJ_OVER_A = Rmaj[gridpoint_cp] / a
 
-    delta = IMAS.interp1d(eq1d.rho_tor_norm, 0.5 * (eq1d.triangularity_lower + eq1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)
+    delta = IMAS.interp1d(eqt1d.rho_tor_norm, 0.5 * (eqt1d.triangularity_lower + eqt1d.triangularity_upper)).(cp1d.grid.rho_tor_norm)
     sdelta = rmin .* IMAS.gradient(rmin, delta)
     input_neo.S_DELTA = sdelta[gridpoint_cp]
 
@@ -297,8 +297,8 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
 
     zeta =
         IMAS.interp1d(
-            eq1d.rho_tor_norm,
-            0.25 * (eq1d.squareness_lower_inner .+ eq1d.squareness_lower_outer .+ eq1d.squareness_upper_inner .+ eq1d.squareness_upper_outer)
+            eqt1d.rho_tor_norm,
+            0.25 * (eqt1d.squareness_lower_inner .+ eqt1d.squareness_lower_outer .+ eqt1d.squareness_upper_inner .+ eqt1d.squareness_upper_outer)
         ).(cp1d.grid.rho_tor_norm)
     input_neo.ZETA = zeta[gridpoint_cp]
     szeta = rmin .* IMAS.gradient(rmin, zeta)
@@ -310,7 +310,7 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
     drmaj = IMAS.gradient(rmin, Rmaj)
     input_neo.SHIFT = drmaj[gridpoint_cp]
 
-    Z0 = IMAS.interp1d(eq1d.rho_tor_norm, eq1d.geometric_axis.z * 1e2).(cp1d.grid.rho_tor_norm)
+    Z0 = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.geometric_axis.z * 1e2).(cp1d.grid.rho_tor_norm)
     input_neo.ZMAG_OVER_A = Z0[gridpoint_cp] / a
     sZ0 = IMAS.gradient(rmin, Z0)
     input_neo.S_ZMAG = sZ0[gridpoint_cp]
