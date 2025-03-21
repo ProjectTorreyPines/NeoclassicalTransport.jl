@@ -4,6 +4,7 @@ authors = ["adrianaghiozzi <67669644+adrianaghiozzi@users.noreply.github.com>"]
 version = "1.0.6"
 
 [deps]
+GACODE = "bb074124-7a58-47ce-bd41-6b7098184f23"
 IMAS = "13ead8c1-b7d1-41bb-a6d0-5b8b65ed587a"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 

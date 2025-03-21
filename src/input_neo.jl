@@ -1,5 +1,3 @@
-using IMAS
-
 Base.@kwdef mutable struct InputNEO
     BETA_STAR::Union{Float64,Missing} = missing
     DELTA::Union{Float64,Missing} = missing
@@ -236,7 +234,7 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
     m_to_cm = IMAS.cgs.m_to_cm
     m³_to_cm³ = IMAS.cgs.m³_to_cm³
 
-    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
+    rmin = GACODE.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
     temp_1 = ions[1].temperature
@@ -283,7 +281,7 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
     q = q_profile[gridpoint_cp]
     input_neo.Q = abs(q)
 
-    input_neo.RHO_STAR = IMAS.rho_s(cp1d, eqt)[gridpoint_cp] / a
+    input_neo.RHO_STAR = GACODE.rho_s(cp1d, eqt)[gridpoint_cp] / a
 
     Rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(cp1d.grid.rho_tor_norm)
     input_neo.RMAJ_OVER_A = Rmaj[gridpoint_cp] / a

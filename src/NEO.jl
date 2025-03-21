@@ -1,5 +1,8 @@
 module NEO
 
+using IMAS
+import GACODE
+
 include("input_neo.jl")
 
 include("hirshman_sigmar.jl")
@@ -57,7 +60,7 @@ function run_neo(input_neo::InputNEO)
     ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
     # assign fluxes to FluxSolution structure
-    sol = IMAS.FluxSolution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+    sol = GACODE.FluxSolution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
     return sol
 end
 

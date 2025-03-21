@@ -33,7 +33,7 @@ function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.
     rho_tor_norm = cp1d.grid.rho_tor_norm
     m_to_cm = IMAS.cgs.m_to_cm
 
-    rmin = IMAS.r_min_core_profiles(eqt1d, rho_tor_norm)
+    rmin = GACODE.r_min_core_profiles(eqt1d, rho_tor_norm)
     a = rmin[end]
     rmaj = IMAS.interp1d(eqt1d.rho_tor_norm, m_to_cm * 0.5 * (eqt1d.r_outboard .+ eqt1d.r_inboard)).(rho_tor_norm) ./ a
     q = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(rho_tor_norm)
@@ -62,7 +62,7 @@ function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_
     n = length(cp1d.grid.rho_tor_norm)
 
     eqt1d = eqt.profiles_1d
-    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
+    rmin = GACODE.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
     num_ions = length(cp1d.ion)
@@ -304,7 +304,7 @@ function compute_HS(
 
     n_species = length(cp1d.ion) + 1
 
-    rho = IMAS.rho_s(cp1d, eqt) ./ a
+    rho = GACODE.rho_s(cp1d, eqt) ./ a
 
     Nx = 10 # Can be lowered to speed up calculation time
     integ_order = 1
@@ -379,10 +379,10 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     pflux_multi, eflux_multi = HS_solution
 
     eqt1d = eqt.profiles_1d
-    rmin = IMAS.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
+    rmin = GACODE.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
-    neo_rho_star = (IMAS.rho_s(cp1d, eqt)./a)[rho]
+    neo_rho_star = (GACODE.rho_s(cp1d, eqt)./a)[rho]
 
     temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
     dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
@@ -399,7 +399,7 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     particle_flux_i = pflux_norm[1:end-1]
 
     # assign fluxes to FluxSolution structure
-    sol = IMAS.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
+    sol = GACODE.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
     return sol
 end
 

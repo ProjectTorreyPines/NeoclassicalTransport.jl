@@ -1,6 +1,6 @@
 using NEO
+using NEO.IMAS
 using Test
-using IMAS
 
 dd = IMAS.json2imas(joinpath(@__DIR__, "highbetap_fpp_325_ods.json"))
 eqt = dd.equilibrium.time_slice[];
