@@ -47,7 +47,7 @@ function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.
     Bmag2_avg = IMAS.interp1d(eqt1d.rho_tor_norm, Bmag2_avg_eq).(rho_tor_norm)
 
     f_cp = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.f).(rho_tor_norm)
-    bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, IMAS.bunit(eqt1d)).(rho_tor_norm)
+    bunit_cp = IMAS.interp1d(eqt1d.rho_tor_norm, GACODE.bunit(eqt1d)).(rho_tor_norm)
     f = f_cp .* m_to_cm ./ bunit_cp
 
     return EquilibriumGeometry(; eqt.time, rmin, rmaj, a, q, ftrap, Bmag2_avg, f)
