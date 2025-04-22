@@ -188,7 +188,7 @@ function compute_transport(input::FACITinput)
 
             deltan, Deltan, nn = asymmetry_analytical(input.rho, theta, GG, UU, eps, input.invaspct, input.qmag, nuz/wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
             
-            dD2 = 0.5*(deltan^2 + Deltan^2)
+            dD2 = 0.5*(deltan.^2 + Deltan.^2)
         
             CgeoG = @. 2.0*eps*deltan + dD2 + 2.0*eps2
             CgeoU = @. -(eps*(dNH - deltan) - dD2 + 0.5*(deltan*dNH + Deltan*dNV))
@@ -566,7 +566,6 @@ end
 
 function asymmetry_analytical(rho, theta, GG, UU, eps, invaspct, qmag, nuswcz, deltaM, Ai, Aimp, Zi, Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)  
     UG = 1 .+ UU ./ GG
-    @show size(UG)
     
     if nat_asym
         Ae = nuswcz .* qmag.^2 ./ invaspct
@@ -576,12 +575,12 @@ function asymmetry_analytical(rho, theta, GG, UU, eps, invaspct, qmag, nuswcz, d
     
     AGe = Ae*GG
     HH = 1.0
-    CD0 = -eps/UG
-    QQ = CD0 * (dNV ./ (eps)) .* (UG .- 1.0)
-    FF = CD0 * (1 .- 0.5 * dNH .* (UG .- 1.0) / (eps) )
+    CD0 = -eps./UG
+    QQ = CD0 .* (dNV ./ (eps)) .* (UG .- 1.0)
+    FF = CD0 .* (1 .- 0.5 * dNH .* (UG .- 1.0) ./ (eps) )
     KK = 1.
     
-    CD = FF .- 0.5 .* (dminphia .- deltaM)
+    CD = FF .- 0.5 * (dminphia .- deltaM)
     CDV = -0.5 .* (dmajphia .+ QQ)
     RD = @. sqrt((FF + 0.5*(dminphia-deltaM))^2 + 0.25*(dmajphia - QQ)^2)
     DD = @. RD^2 + AGe^2*(RD/CD0)^2
@@ -594,7 +593,7 @@ function asymmetry_analytical(rho, theta, GG, UU, eps, invaspct, qmag, nuswcz, d
     
     deltan = @. CD + RD*cosa
     Deltan = @. CDV + RD*sqrt(KK/HH)*sina
-    nn = 1 + (deltan * transpose(cos.(theta))) .+ (Deltan * transpose(sin.(theta)))
+    nn = 1 .+ (deltan * transpose(cos.(theta))) .+ (Deltan * transpose(sin.(theta)))
     
     return deltan, Deltan, nn
 end
