@@ -119,6 +119,13 @@ function compute_transport(input::FACITinput)
     grad_ln_Ti = input.gradTi ./ input.Ti
     grad_ln_Nimp = input.gradNimp ./ input.Nimp
 
+   
+    if rho[1] == 1e-6
+        grad_ln_Ni[1] = 0.0
+        grad_ln_Ti[1] = 0.0
+        grad_ln_Nimp[1] = 0.0
+    end
+
     Tauii, Tauimpi, Tauiimp, Tauimpimp = collision_times(input.Zi, input.Zimp, input.Ni, input.Nimp, input.Ti, input.Ai, input.Aimp)
     ft = ftrap(eps)
     Mzstar = @. sqrt(input.Aimp / input.Ai - (input.Zimp / input.Zi) * input.Zeff / (input.Zeff + 1/input.Te_Ti)) * input.Machi
@@ -132,7 +139,8 @@ function compute_transport(input::FACITinput)
     ki = ki_f(nuistar, ft, input.Zeff, input.Machi)
     
     eps2 = eps.^2
-    C0z = C2(alpha, g, input.Ai, input.Aimp, f1, f2)
+    mu_ie = (96 .* sqrt(2) ./ 125) .* (1 ./ input.Zi.^2) .* sqrt.(me ./ mi) .* ((1 ./ input.Te_Ti).^1.5)    
+    C0z = C2(alpha, g, input.Ai, input.Aimp, f1, f2) ./ (1 .+ f3 .* mu_ie .* g.^2)
     nuz = 1.0 ./ (sqrt.(1 .+ input.Aimp ./ input.Ai) .* Tauimpi)
 
     mimp = input.Aimp * mp
