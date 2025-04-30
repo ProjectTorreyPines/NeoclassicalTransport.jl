@@ -12,6 +12,7 @@
 using LinearAlgebra
 using IMAS
 using Trapz
+using Statistics
 
 # -----------------
 # Physical Constants
@@ -23,6 +24,7 @@ const eps0 = IMAS.mks.ϵ_0
 const eps_pi_fac = 3 * eps0^2 * (2pi/qe)^1.5 / qe
 
 Base.@kwdef mutable struct FACITinput
+    nr::Union{Int,Missing} = missing
     rho::Union{Vector{Float64},Missing} = missing
     Zimp::Union{Vector{Float64},Missing} = missing
     Aimp::Union{Float64,Missing} = missing
@@ -44,12 +46,18 @@ Base.@kwdef mutable struct FACITinput
     Te_Ti::Union{Vector{Float64},Missing} = missing
     RV::Union{Matrix{Float64},Missing} = missing
     FV::Union{Vector{Float64},Missing} = missing
+    ZV::Union{Matrix{Float64},Missing} = missing
+    BV::Union{Matrix{Float64},Missing} = missing
+    JV::Union{Matrix{Float64},Missing} = missing
+    dpsidx::Union{Vector{Float64},Missing} = missing
     fsaout::Union{Bool,Missing} = missing
     full_geom::Union{Bool,Missing} = missing
     fH::Union{Float64,Missing} = missing
     bC::Union{Float64,Missing} = missing
     sigH::Union{Float64,Missing} = missing
     TperpTpar_axis::Union{Float64,Missing} = missing
+    theta::Union{Vector{Float64},Missing} = missing
+    nat_asym::Union{Bool,Missing} = missing
 end
 
 Base.@kwdef mutable struct FACIToutput
@@ -62,15 +70,16 @@ Base.@kwdef mutable struct FACIToutput
 end
 
 function FACITinput(
-    rho::Vector{Float64}, Zimp::Union{Vector{Float64}, Float64}, Aimp::Float64,
+    nr::Union{Int,Missing}, rho::Vector{Float64}, Zimp::Union{Vector{Float64}, Float64}, Aimp::Float64,
     Zi::Float64, Ai::Float64,
     Ti::Vector{Float64}, Ni::Vector{Float64}, Nimp::Vector{Float64},
     Machi::Vector{Float64}, Zeff::Vector{Float64},
     gradTi::Vector{Float64}, gradNi::Vector{Float64}, gradNimp::Vector{Float64},
     invaspct::Float64, B0::Float64, R0::Float64, qmag::Vector{Float64};
     rotation_model::Int = 0,
-    Te_Ti::Union{Float64, Vector{Float64}} = 1.0, RV::Union{Matrix{Float64},Missing}, FV::Union{Vector{Float64},Missing}, fsaout::Bool = true, full_geom::Bool = false, fH::Float64 = 0.0,
-    bC::Float64 = 0.0, sigH::Float64 = 1.0, TperpTpar_axis::Float64 = 1.0
+    Te_Ti::Union{Float64, Vector{Float64}} = 1.0, RV::Union{Matrix{Float64},Missing}, FV::Union{Vector{Float64},Missing}, ZV::Union{Matrix{Float64},Missing}, BV::Union{Matrix{Float64},Missing},
+    JV::Union{Matrix{Float64},Missing} = missing, dpsidx::Union{Vector{Float64},Missing}, fsaout::Bool = true, full_geom::Bool = false, fH::Float64 = 0.0,
+    bC::Float64 = 0.0, sigH::Float64 = 1.0, TperpTpar_axis::Float64 = 1.0, theta::Union{Vector{Float64},Missing} = missing, nat_asym::Union{Bool,Missing} = missing
 )
     nr = length(rho)
     if length(Zimp) == 1
@@ -95,6 +104,14 @@ function FACITinput(
         JV = B0 ./ (qmag .* RV)
     end
 
+    if !ismissing(RV) && !ismissing(ZV)
+        JV = jacobian(RV, ZV, amin*rho, theta) # translate jacobian
+    end
+
+    if ismissing(BV)
+        BV = B0 ./ (1 .+ reshape(eps, :, 1) .* reshape(cos.(theta), 1, :))
+    end
+
     Dz = zeros(nr)
     Kz = zeros(nr)
     Hz = zeros(nr)
@@ -102,9 +119,9 @@ function FACITinput(
     Vrz = zeros(nr)
     Flux_z = zeros(nr)
 
-    return FACITinput(rho, Zimp, Aimp, Zi, Ai, Ti, Ni, Nimp, Machi, Zeff,
-                      gradTi, gradNi, gradNimp, invaspct, B0, R0, qmag, rotation_model, Te_Ti, RV, FV,
-                      fsaout, full_geom, fH, bC, sigH, TperpTpar_axis)
+    return FACITinput(nr, rho, Zimp, Aimp, Zi, Ai, Ti, Ni, Nimp, Machi, Zeff,
+                      gradTi, gradNi, gradNimp, invaspct, B0, R0, qmag, rotation_model, Te_Ti, RV, FV, ZV, BV,
+                      JV, dpsidx, fsaout, full_geom, fH, bC, sigH, TperpTpar_axis, theta, nat_asym)
 end
 
 function compute_transport(input::FACITinput)
@@ -169,16 +186,16 @@ function compute_transport(input::FACITinput)
         AsymPhi, AsymN = polasym_input(input.rho, eps, input.Zeff, input.Zi, input.Te_Ti, Machi2, input.fH, input.bC, input.TperpTpar_axis, input.sigH) # need to translate this function
         if input.full_geom 
         
-            b2 = BV^2/fluxavg(BV^2, JV)[:,None] # need to translate fluxavg 
-    
-            deltan, Deltan, nn, b2sNNavg, NV = asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te_Ti, Machi2, R0, nuz, BV, RV, JV, FV, dpsidx, AsymPhi, AsymN, b2, nat_asym)
-                                                          
+            b2 = input.BV.^2 ./ reshape(fluxavg(input.BV.^2, input.JV), :, 1)
 
-            b2snnavg = fluxavg(b2/nn, JV)
-            nnsb2avg = fluxavg(nn/b2, JV)
+            regulopt = [1e-2,0.5,1e-5,5] # this can be changed, parameters for the convergence of iterative calc of asymmetries 
+            deltan, Deltan, nn, b2sNNavg, NV = asymmetry_iterative(regulopt, nr, input.theta, GG, UU, input.Ai, input.Aimp, input.Zi, input.Zimp, input.Te_Ti, Machi2, input.R0, nuz, input.BV, input.RV, input.JV, input.FV, input.dpsidx, AsymPhi, AsymN, b2, input.nat_asym)
+                                                          
+            b2snnavg = fluxavg(b2 ./ nn, input.JV)
+            nnsb2avg = fluxavg(nn ./ b2, input.JV)
                         
-            CgeoG = nnsb2avg - 1/b2snnavg
-            CgeoU = fluxavg(nn/NV, JV) - b2sNNavg/b2snnavg
+            CgeoG = nnsb2avg .- 1 ./ b2snnavg
+            CgeoU = fluxavg(nn ./ NV, input.JV) .- b2sNNavg ./ b2snnavg
             CclG  = nnsb2avg
             
         else
@@ -201,13 +218,11 @@ function compute_transport(input::FACITinput)
             CgeoG = @. 2.0*eps*deltan + dD2 + 2.0*eps2
             CgeoU = @. -(eps*(dNH - deltan) - dD2 + 0.5*(deltan*dNH + Deltan*dNV))
             CclG = @. 1.0 + eps*deltan + 2*eps2
-            
-        e0imp = 1.0
 
         end
+
+        e0imp = 1.0
     
-        
-        
     elseif input.rotation_model == 2
         
         CG0 = @. 2 * eps2 * (0.96 * (1 - 0.54 * ft^4.5))
@@ -218,10 +233,8 @@ function compute_transport(input::FACITinput)
         if input.fsaout
             # e0imp = fluxavg(exp(Mzstar[...,None]^2*((RV^2 - (RV[:,0]^2)[:,None])/R0^2)), JV)
             JV = input.B0 ./ (input.qmag .* input.RV)
-            e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- input.RV[:,1].^2) ./ input.R0^2), JV)
-            @show e0imp
-
-            # e0imp = ones(nr) # fix this 
+            # e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- input.RV[:,1].^2) ./ input.R0^2), JV)
+            e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- reshape(input.RV[:,1].^2, :, 1)) ./ input.R0^2), JV)
         else
             e0imp = ones(nr)
         end
@@ -260,6 +273,145 @@ end
 ########################
 # Supporting functions #
 ########################
+
+function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te_Ti, Machi2, R0, nuz, BV, RV, JV, FV, dpsidx, AsymPhi, AsymN, b2, nat_asym)
+    err = regulopt[1]
+    prog = regulopt[2]
+    regulweight = regulopt[3]
+    ierrmax = regulopt[4]
+    
+    Error = zeros((nr, Int(ierrmax)))
+    asym_err = zeros(nr)
+    
+    theta_new = collect(range(0, 2*pi, length(theta) + 1)[1:end-1]) #poloidal coordinate grid without repeating 0 at 2pi
+    #thetalong = np.concatenate((theta-2*np.pi,theta,theta+2*np.pi))
+
+    Factrot0 = (Aimp/Ai)*Machi2/R0^2
+    
+    if nat_asym
+        nuz = dropdims(nuz, dims = (findall(size(nuz) .== 1)...,))
+        Apsi = JV .* (FV .* (Aimp.*mp) .* nuz)  ./ (Zimp .* qe .*(dpsidx.^2 .+ 1e-33)) # as defined after eq. 9 in Maget (2020)
+    else
+        Apsi = np.zeros(size(JV))
+    end
+    
+    PhiV = (AsymPhi[2] * cos.(theta)') + (AsymPhi[1] * sin.(theta)')
+    NV   = 1 .+ (AsymN[1] * cos.(theta)') + (AsymN[2] * sin.(theta)')
+    
+    b2sNNavg  = fluxavg(b2./NV , JV)  # <b^2/N>
+    
+    nn = ones(size(BV)) # poloidal distribution of the impurity density: n = nz/<nz>
+    
+    dtheta = theta_new[2] - theta_new[1] # step size in poloidal coordinate grid
+    
+    for ix in 1:nr #this cannot be vectorized because in the while, the local nn[ix] is set each time
+        nnp = 2 
+        nnx = nn[ix]   # local impurity density, poloidal dependence
+        
+        ierr   = 1
+        progx  = prog
+        Erreur = 2*err
+        
+        AA = zeros((length(theta_new) + 1, length(theta_new) + 1))
+        LL = zeros((length(theta_new) + 1, length(theta_new) + 1))
+        BB = zeros((length(theta_new) + 1, 1))
+
+        
+        while (Erreur>err && ierr<ierrmax) # iterative calculation of poloidal asymmetry
+            b2snavg = fluxavg(b2[ix,:]/nnx, JV[ix,:]) # <b^2/n>
+
+            FFF  = Apsi[ix,:].*( GG[ix,:] .+ (b2[ix,:]./NV[ix,:]).*UU[ix,:])
+            GGG  = -Zimp[ix,:].*(Te_Ti[ix,:]).*(PhiV[ix,:].-PhiV[ix,1]) .+ Factrot0[ix,:].*(RV[ix,:].^2 .- RV[ix,1].^2)
+            HHH  = Apsi[ix,:].*(b2[ix,:]./b2snavg).*(GG[ix,:] .+ b2sNNavg[ix,:].*UU[ix,:])
+
+            
+            for ii in 2:length(theta_new)-1
+                
+                AA[ii,ii-1]  = -0.5/dtheta
+                AA[ii,ii]    = only(-FFF[ii,:].-(0.5 ./ dtheta)*(GGG[ii+1,:] .- GGG[ii-1,:]))
+                AA[ii,ii+1]  = 0.5/dtheta
+                
+                LL[ii, ii-1] = 1.
+                LL[ii, ii]   = -2.
+                LL[ii, ii+1] = 1.
+                
+                BB[ii,1]     = only(-HHH[ii,:])
+            end
+
+            
+            AA[1,1]  = only(-FFF[1,:]-(0.5/dtheta)*(GGG[2,:]-GGG[length(theta_new)-2,:]))
+            AA[1,2]  = 0.5/dtheta
+            AA[1,end-1] = -0.5/dtheta 
+            LL[1,1]  = -2.
+            LL[1,2]  = 1.
+            LL[1,end-1] = 1. 
+            BB[1,1]  = only(-HHH[1,:])
+            
+        
+            
+            AA[end-1,end-2] = -0.5/dtheta
+            AA[end-1,end-1] = only(-FFF[length(theta_new)-1,:]-(0.5/dtheta)*(GGG[1,:]-GGG[length(theta_new)-2,:]))
+            AA[end-1,end] = 0.5/dtheta
+            LL[end-1,end-2] = 1.
+            LL[end-1,end-1] = -2.
+            LL[end-1,end] = 1.
+            BB[end-1,1]  = only(-HHH[length(theta_new)-1,:])
+            
+            
+            AA[end,end] = -1.
+            AA[end,1]  = 1
+            BB[end,1]  = 0.
+            
+            CC   = AA' * AA + regulweight * LL' * LL
+            nnya = inv(CC) * AA' * BB
+            
+            nny  = nnya[1:end-1,1]/fluxavg(nnya[1:end-1,1],JV[ix,:])
+            if any(isnan.(nny))
+                nny = [1e-4] # FIX THIS 
+            end
+            nny  = max(maximum(nny), 1e-5)
+            
+            nnp = nnx
+            nnx = progx*nnp + (1-progx)*nny
+            
+            Err = maximum(abs.(IMAS.gradient(theta, log.(nnx) .- GGG) .- FFF .+ HHH ./ nnx))
+            
+            ierr = ierr+1
+    #         #print('r/a=', cdat.rho[ix],' - ierr=',ierr,' - err=', Erreur)
+                
+            nn[ix]       = nnx
+            asym_err[ix] = Err
+        end
+    end
+
+    deltan = vec(2 .* mean((nn .- 1) .* cos.(theta_new'), dims=2)) # horizontal asymmetry of the impurity density
+    Deltan = vec(2 .* mean((nn .- 1) .* sin.(theta_new'), dims=2)) # vertical asymmetry of the impurity density
+    
+    return deltan, Deltan, nn, b2sNNavg, NV
+
+end
+
+function fluxavg(QV, JV)
+    if ndims(JV) == 1
+        x = 0:(length(JV)-1)
+        denom = IMAS.trapz(x, JV)
+        num = IMAS.trapz(x, QV .* JV)
+        Qavg = num / denom
+    else
+        x = 0:(size(JV, 2)-1)
+        denom = [IMAS.trapz(x, JV[i,:]) for i in 1:size(JV, 1)]
+        
+        if ndims(QV) == 1
+            num = [IMAS.trapz(x, QV .* JV[i,:]) for i in 1:size(JV, 1)]
+        else
+            num = [IMAS.trapz(x, QV[i,:] .* JV[i,:]) for i in 1:size(QV, 1)]
+        end
+        
+        Qavg = num ./ denom
+    end
+    
+    return Qavg
+end
 
 function ftrap(eps)
     return 1 .- (1 .- eps).^1.5 ./ (sqrt.(1 .+ eps) .* (1 .+ 1.46 .* sqrt.(eps)))
