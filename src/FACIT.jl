@@ -293,7 +293,7 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
         nuz = dropdims(nuz, dims = (findall(size(nuz) .== 1)...,))
         Apsi = JV .* (FV .* (Aimp.*mp) .* nuz)  ./ (Zimp .* qe .*(dpsidx.^2 .+ 1e-33)) # as defined after eq. 9 in Maget (2020)
     else
-        Apsi = np.zeros(size(JV))
+        Apsi = zeros(size(JV))
     end
     
     PhiV = (AsymPhi[2] * cos.(theta)') + (AsymPhi[1] * sin.(theta)')
