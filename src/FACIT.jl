@@ -296,7 +296,7 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
         Apsi = zeros(size(JV))
     end
     
-    PhiV = (AsymPhi[2] * cos.(theta)') + (AsymPhi[1] * sin.(theta)')
+    PhiV = (AsymPhi[1] * cos.(theta)') + (AsymPhi[2] * sin.(theta)')
     NV   = 1 .+ (AsymN[1] * cos.(theta)') + (AsymN[2] * sin.(theta)')
     
     b2sNNavg  = fluxavg(b2./NV , JV)  # <b^2/N>
