@@ -211,8 +211,9 @@ function compute_transport(input::FACITinput)
             theta = ones(20) # fix this
             nat_asym = true # expose this
 
-            deltan, Deltan, nn = asymmetry_analytical(input.rho, theta, GG, UU, eps, input.invaspct, input.qmag, nuz/wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
-            
+            deltan, Deltan, nn = asymmetry_analytical(input.rho, theta, GG, UU, eps, input.invaspct, input.qmag, nuz./wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
+            @show nn[end]
+
             dD2 = 0.5*(deltan.^2 + Deltan.^2)
         
             CgeoG = @. 2.0*eps*deltan + dD2 + 2.0*eps2
@@ -245,9 +246,9 @@ function compute_transport(input::FACITinput)
         # nn     = 1 + deltan[...,None]*np.cos(theta) # poloidal distribution of the impurity density
     end
 
-    Dz_PS = @. fdps * input.qmag^2 * rhoLz2 * nuz * (2 * eps2 * (0.96 * (1 - 0.54 * ft^4.5))) / (2 * eps2)
+    Dz_PS = @. fdps * input.qmag^2 * rhoLz2 * nuz * (CgeoG/(2*eps2)) / e0imp
     Kz_PS = @. (input.Zimp / input.Zi) * Dz_PS
-    Hz_PS = @. (-(1 + (input.Zimp / input.Zi) * (C0z - 1)) * Dz_PS)
+    Hz_PS = @. (-(1 + (input.Zimp / input.Zi) * (C0z - 1)) + (CgeoU/CgeoG)*(input.Zimp/input.Zi)*(C0z + ki))* Dz_PS
 
     Dz_BP = @. (1.5 * (qe * input.Ti) / (input.Zimp ^ 2 * qe ^ 2 * input.FV ^ 2 * input.Nimp)) * (1 / (1 / K11i + 1 / K11z)) / e0imp
     Kz_BP = @. (input.Zimp / input.Zi) * Dz_BP
@@ -753,7 +754,7 @@ function asymmetry_analytical(rho, theta, GG, UU, eps, invaspct, qmag, nuswcz, d
     
     deltan = @. CD + RD*cosa
     Deltan = @. CDV + RD*sqrt(KK/HH)*sina
-    nn = 1 .+ (deltan * transpose(cos.(theta))) .+ (Deltan * transpose(sin.(theta)))
+    nn = 1 .+ deltan .* cos.(theta') .+ Deltan .* sin.(theta')
     
     return deltan, Deltan, nn
 end
