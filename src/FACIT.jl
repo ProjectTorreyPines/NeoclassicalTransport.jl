@@ -24,7 +24,6 @@ const eps0 = IMAS.mks.ϵ_0
 const eps_pi_fac = 3 * eps0^2 * (2pi/qe)^1.5 / qe
 
 Base.@kwdef mutable struct FACITinput
-    nr::Union{Int,Missing} = missing
     rho::Union{Vector{Float64},Missing} = missing
     Zimp::Union{Vector{Float64},Missing} = missing
     Aimp::Union{Float64,Missing} = missing
@@ -70,7 +69,7 @@ Base.@kwdef mutable struct FACIToutput
 end
 
 function FACITinput(
-    nr::Union{Int,Missing}, rho::Vector{Float64}, Zimp::Union{Vector{Float64}, Float64}, Aimp::Float64,
+    rho::Vector{Float64}, Zimp::Union{Vector{Float64}, Float64}, Aimp::Float64,
     Zi::Float64, Ai::Float64,
     Ti::Vector{Float64}, Ni::Vector{Float64}, Nimp::Vector{Float64},
     Machi::Vector{Float64}, Zeff::Vector{Float64},
@@ -119,7 +118,7 @@ function FACITinput(
     Vrz = zeros(nr)
     Flux_z = zeros(nr)
 
-    return FACITinput(nr, rho, Zimp, Aimp, Zi, Ai, Ti, Ni, Nimp, Machi, Zeff,
+    return FACITinput(rho, Zimp, Aimp, Zi, Ai, Ti, Ni, Nimp, Machi, Zeff,
                       gradTi, gradNi, gradNimp, invaspct, B0, R0, qmag, rotation_model, Te_Ti, RV, FV, ZV, BV,
                       JV, dpsidx, fsaout, full_geom, fH, bC, sigH, TperpTpar_axis, theta, nat_asym)
 end
