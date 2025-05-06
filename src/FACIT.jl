@@ -234,7 +234,7 @@ function compute_transport(input::FACITinput)
             # e0imp = fluxavg(exp(Mzstar[...,None]^2*((RV^2 - (RV[:,0]^2)[:,None])/R0^2)), JV)
             JV = input.B0 ./ (input.qmag .* input.RV)
             # e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- input.RV[:,1].^2) ./ input.R0^2), JV)
-            e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- reshape(input.RV[:,1].^2, :, 1)) ./ input.R0^2), JV)
+            e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2 .* ((input.RV.^2 .- reshape(input.RV[:,1].^2, :, 1))) ./ input.R0^2), JV)
         else
             e0imp = ones(nr)
         end
