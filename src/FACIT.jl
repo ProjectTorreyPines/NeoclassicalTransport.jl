@@ -104,7 +104,7 @@ function FACITinput(
     end
 
     if !ismissing(RV) && !ismissing(ZV)
-        JV = jacobian(RV, ZV, amin*rho, theta) # translate jacobian
+        JV = jacobian(RV, ZV, amin*rho, theta)
     end
 
     if ismissing(BV)
@@ -273,6 +273,20 @@ end
 ########################
 # Supporting functions #
 ########################
+
+function jacobian(R, Z, r, theta)
+    dRdr = IMAS.gradient(R[1,:], r)
+    dRdth = IMAS.gradient(R[:,1], theta)
+    dZdr = IMAS.gradient(Z[1,:], r)
+    dZdth = IMAS.gradient(Z[:,1], theta) 
+
+    grr = dRdr.^2 + dZdr.^2 
+    grth = dRdr.*dRdth + dZdr.*dZdth 
+    gthth = dRdth.^2 + dZdth.^2 
+
+    return R*sqrt.(grr.*gthth - grth.^2)
+end
+
 
 function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te_Ti, Machi2, R0, nuz, BV, RV, JV, FV, dpsidx, AsymPhi, AsymN, b2, nat_asym)
     err = regulopt[1]
