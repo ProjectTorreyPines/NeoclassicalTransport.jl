@@ -230,16 +230,13 @@ function compute_transport(input::FACITinput)
         CclG = 1 .+ 2 .* eps2
         
         if input.fsaout
-            # e0imp = fluxavg(exp(Mzstar[...,None]^2*((RV^2 - (RV[:,0]^2)[:,None])/R0^2)), JV)
-            JV = input.B0 ./ (input.qmag .* input.RV)
-            # e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2).*((input.RV.^2 .- input.RV[:,1].^2) ./ input.R0^2), JV)
-            e0imp = fluxavg(exp.(reshape(Mzstar, size(Mzstar)..., 1).^2 .* ((input.RV.^2 .- reshape(input.RV[:,1].^2, :, 1))) ./ input.R0^2), JV)
+            e0imp = fluxavg(exp.(reshape(Mzstar, :, 1).^2 .* (input.RV.^2 .- input.RV[:,1].^2)./input.R0^2), input.JV) 
         else
             e0imp = ones(nr)
         end
         
         
-        deltan = 1/e0imp .- 1
+        deltan = 1 ./ e0imp .- 1
         Deltan = zeros(nr)
         # nn     = 1 + deltan[...,None]*np.cos(theta) # poloidal distribution of the impurity density
     end
