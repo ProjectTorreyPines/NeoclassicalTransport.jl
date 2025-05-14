@@ -207,10 +207,9 @@ function compute_transport(input::FACITinput)
             dNH =  AsymN[1] 
             dNV =  AsymN[2]
             
-            theta = ones(20) # fix this
             nat_asym = true # expose this
 
-            deltan, Deltan, nn = asymmetry_analytical(input.rho, theta, GG, UU, eps, input.invaspct, input.qmag, nuz./wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
+            deltan, Deltan, nn = asymmetry_analytical(input.rho, input.theta, GG, UU, eps, input.invaspct, input.qmag, nuz./wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
             @show nn[end]
 
             dD2 = 0.5*(deltan.^2 + Deltan.^2)
