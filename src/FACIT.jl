@@ -269,16 +269,17 @@ end
 ########################
 
 function jacobian(R, Z, r, theta)
-    dRdr = IMAS.gradient(R[1,:], r)
-    dRdth = IMAS.gradient(R[:,1], theta)
-    dZdr = IMAS.gradient(Z[1,:], r)
-    dZdth = IMAS.gradient(Z[:,1], theta) 
+    method = :central
+    dRdr = IMAS.gradient(r, theta, R, 1; method = method)
+    dRdth = IMAS.gradient(r, theta, R, 2; method = method)
+    dZdr = IMAS.gradient(r, theta, Z, 1; method = method)
+    dZdth = IMAS.gradient(r, theta, Z, 2; method = method)
 
     grr = dRdr.^2 + dZdr.^2 
     grth = dRdr.*dRdth + dZdr.*dZdth 
     gthth = dRdth.^2 + dZdth.^2 
 
-    return R*sqrt.(grr.*gthth - grth.^2)
+    return R.*sqrt.(grr.*gthth .- grth.^2)
 end
 
 
@@ -297,8 +298,7 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
     Factrot0 = (Aimp/Ai)*Machi2/R0^2
     
     if nat_asym
-        nuz = dropdims(nuz, dims = (findall(size(nuz) .== 1)...,))
-        Apsi = JV .* (FV .* (Aimp.*mp) .* nuz)  ./ (Zimp .* qe .*(dpsidx.^2 .+ 1e-33)) # as defined after eq. 9 in Maget (2020)
+        Apsi = JV .* (FV * (Aimp * mp) .* nuz) ./ (Zimp * qe .* (dpsidx.^2 .+ 1e-33))
     else
         Apsi = zeros(size(JV))
     end
