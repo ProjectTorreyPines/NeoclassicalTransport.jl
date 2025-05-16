@@ -47,7 +47,7 @@ Base.@kwdef mutable struct FACITinput
     FV::Union{Vector{Float64},Missing} = missing
     ZV::Union{Matrix{Float64},Missing} = missing
     BV::Union{Matrix{Float64},Missing} = missing
-    JV::Union{Vector{Float64},Matrix{Float64},Missing} = missing
+    JV::Union{Matrix{Float64},Missing} = missing
     dpsidx::Union{Vector{Float64},Missing} = missing
     fsaout::Union{Bool,Missing} = missing
     full_geom::Union{Bool,Missing} = missing
@@ -60,6 +60,7 @@ Base.@kwdef mutable struct FACITinput
 end
 
 Base.@kwdef mutable struct FACIToutput
+    rho::Union{Vector{Float64},Missing} = missing
     Dz::Union{Vector{Float64},Missing} = missing
     Kz::Union{Vector{Float64},Missing} = missing
     Hz::Union{Vector{Float64},Missing} = missing
@@ -77,7 +78,7 @@ function FACITinput(
     invaspct::Float64, B0::Float64, R0::Float64, qmag::Vector{Float64};
     rotation_model::Int = 0,
     Te_Ti::Union{Float64, Vector{Float64}} = 1.0, RV::Union{Matrix{Float64},Missing}, FV::Union{Vector{Float64},Missing}, ZV::Union{Matrix{Float64},Missing}, BV::Union{Matrix{Float64},Missing},
-    JV::Union{Vector{Float64},Matrix{Float64},Missing} = missing, dpsidx::Union{Vector{Float64},Missing}, fsaout::Bool = true, full_geom::Bool = false, fH::Float64 = 0.0,
+    JV::Union{Matrix{Float64},Missing} = missing, dpsidx::Union{Vector{Float64},Missing}, fsaout::Bool = true, full_geom::Bool = false, fH::Float64 = 0.0,
     bC::Float64 = 0.0, sigH::Float64 = 1.0, TperpTpar_axis::Float64 = 1.0, theta::Union{Vector{Float64},Missing} = missing, nat_asym::Union{Bool,Missing} = missing
 )
     nr = length(rho)
