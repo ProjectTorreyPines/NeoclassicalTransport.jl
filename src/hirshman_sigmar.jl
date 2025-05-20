@@ -96,27 +96,27 @@ function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_
         Z[i] = IMAS.avgZ(cp1d.ion[i].element[1].z_n, T1)
         mass[i] = cp1d.ion[i].element[1].a * mp / md
 
-        dens[:, i] = cp1d.ion[i].density ./ m³_to_cm³ ./ n_norm
-        temp[:, i] = cp1d.ion[i].temperature ./ t_norm
+        @. dens[:, i] = cp1d.ion[i].density / m³_to_cm³ / n_norm
+        @. temp[:, i] = cp1d.ion[i].temperature / t_norm
 
-        nu[:, i] =
-            (@. sqrt(2) * pi * (cp1d.ion[i].density ./ m³_to_cm³) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) ./ nu_norm
+        @.nu[:, i] =
+            (sqrt(2) * pi * (cp1d.ion[i].density ./ m³_to_cm³) * Z[i]^4.0 * e^4.0 * loglam / sqrt(cp1d.ion[i].element[1].a * mp) / (k * cp1d.ion[i].temperature)^1.5) / nu_norm
 
-        dlnndr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].density, :backward)
-        dlntdr[:, i] = -IMAS.calc_z(rmin / a, cp1d.ion[i].temperature, :backward)
+        dlnndr[:, i] .= .-IMAS.calc_z(rmin / a, cp1d.ion[i].density, :backward)
+        dlntdr[:, i] .= .-IMAS.calc_z(rmin / a, cp1d.ion[i].temperature, :backward)
 
-        vth[:, i] = sqrt.((cp1d.ion[i].temperature ./ t_norm) ./ (cp1d.ion[i].element[1].a * mp / md))
+        @. vth[:, i] = sqrt((cp1d.ion[i].temperature / t_norm) / (cp1d.ion[i].element[1].a * mp / md))
     end
 
-    # tacking on electron parameters at the end 
+    # tacking on electron parameters at the end
     Z[end] = -1.0
     mass[end] = me / md
-    dens[:, end] = ne ./ n_norm
-    temp[:, end] = Te ./ t_norm
-    nu[:, end] = (@. sqrt(2) * pi * ne * (Z[end] * e)^4.0 * loglam / sqrt(me) / (k .* Te)^1.5) ./ nu_norm
-    dlnndr[:, end] = -IMAS.calc_z(rmin / a, ne, :backward)
-    dlntdr[:, end] = -IMAS.calc_z(rmin / a, Te, :backward)
-    vth[:, end] = sqrt.((Te ./ t_norm) ./ (me ./ md))
+    @. dens[:, end] = ne / n_norm
+    @. temp[:, end] = Te / t_norm
+    @. nu[:, end] = (sqrt(2) * pi * ne * (Z[end] * e)^4.0 * loglam / sqrt(me) / (k .* Te)^1.5) / nu_norm
+    dlnndr[:, end] .= .-IMAS.calc_z(rmin / a, ne, :backward)
+    dlntdr[:, end] .= .-IMAS.calc_z(rmin / a, Te, :backward)
+    @. vth[:, end] = sqrt((Te / t_norm) / (me / md))
 
     plasma_profiles = PlasmaProfiles(;Z, mass, dens, temp, nu, dlnndr, dlntdr, vth)
 
@@ -286,7 +286,8 @@ function compute_HS(
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
     plasma_profiles::PlasmaProfiles,
-    equilibrium_geometry::EquilibriumGeometry
+    equilibrium_geometry::EquilibriumGeometry;
+    rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt)
 )
     rmin = equilibrium_geometry.rmin
     a = equilibrium_geometry.a
@@ -304,7 +305,7 @@ function compute_HS(
 
     n_species = length(cp1d.ion) + 1
 
-    rho = GACODE.rho_s(cp1d, eqt) ./ a
+    rho = rho_s ./ a
 
     Nx = 10 # Can be lowered to speed up calculation time
     integ_order = 1
@@ -375,14 +376,15 @@ function compute_HS(
 
 end
 
-function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int)
+function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int;
+                  rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt),
+                  rmin::Vector{<:Real} = GACODE.r_min_core_profiles(eqt.profiles_1d, cp1d.grid.rho_tor_norm),
+                  )
     pflux_multi, eflux_multi = HS_solution
 
-    eqt1d = eqt.profiles_1d
-    rmin = GACODE.r_min_core_profiles(eqt1d, cp1d.grid.rho_tor_norm)
     a = rmin[end]
 
-    neo_rho_star = (GACODE.rho_s(cp1d, eqt)./a)[rho]
+    neo_rho_star = rho_s[rho] / a
 
     temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
     dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
@@ -414,8 +416,10 @@ function hirshmansigmar(
     eqt::IMAS.equilibrium__time_slice,
     cp1d::IMAS.core_profiles__profiles_1d,
     plasma_profiles::PlasmaProfiles,
-    equilibrium_geometry::EquilibriumGeometry
+    equilibrium_geometry::EquilibriumGeometry;
+    rho_s::AbstractVector{<:Real} = GACODE.rho_s(cp1d, eqt),
+    rmin::Vector{<:Real} = GACODE.r_min_core_profiles(eqt.profiles_1d, cp1d.grid.rho_tor_norm),
 )
-    hs = compute_HS(ir, eqt, cp1d, plasma_profiles, equilibrium_geometry)
-    return HS_to_GB(hs, eqt, cp1d, ir)
+    hs = compute_HS(ir, eqt, cp1d, plasma_profiles, equilibrium_geometry; rho_s)
+    return HS_to_GB(hs, eqt, cp1d, ir; rho_s, rmin)
 end
