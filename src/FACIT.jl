@@ -102,6 +102,8 @@ function FACITinput(
         JV = B0 ./ (qmag .* RV)
     end
 
+    amin = invaspct*R0
+
     if !ismissing(RV) && !ismissing(ZV)
         JV = jacobian(RV, ZV, amin*rho, theta)
     end
@@ -143,7 +145,7 @@ function compute_transport(input::FACITinput)
 
     Tauii, Tauimpi, Tauiimp, Tauimpimp = collision_times(input.Zi, input.Zimp, input.Ni, input.Nimp, input.Ti, input.Ai, input.Aimp)
     ft = ftrap(eps)
-    Mzstar = @. sqrt(input.Aimp / input.Ai - (input.Zimp / input.Zi) * input.Zeff / (input.Zeff + 1/input.Te_Ti)) * input.Machi
+    Mzstar = sqrt.(input.Aimp ./ input.Ai .- (input.Zimp ./ input.Zi) .* input.Zeff ./ (input.Zeff .+ 1 ./input.Te_Ti)) .* input.Machi
     f1, f2, f3, fG, fU, yy, fv, fdps, fhbp = facs(input.Zimp, input.Aimp, ft, Mzstar, input.rotation_model)
     K11i, K12i, K11z, K12z = KVISC(input.Nimp, input.Ni, input.Ti, input.Ai, input.Aimp, input.Zi, input.Zimp, Tauii, Tauimpimp, Tauiimp, Tauimpi, eps, ft, input.R0, input.qmag, yy)
 
@@ -171,9 +173,9 @@ function compute_transport(input::FACITinput)
         
         CclG = @. 1 + 2*eps2
         
-        # deltan = zeros(nr)       # horizontal asymmetry of impurity density
-        # Deltan = zeros(nr)       # vertical asymmetry of impurity density
-        # nn     = ones((nr, nth)) # poloidal distribution of the impurity density
+        deltan = zeros(nr)       # horizontal asymmetry of impurity density
+        Deltan = zeros(nr)       # vertical asymmetry of impurity density
+        nn = ones((nr, length(input.theta))) # poloidal distribution of the impurity density
         
         e0imp = 1.0
 
@@ -186,14 +188,14 @@ function compute_transport(input::FACITinput)
         
             b2 = input.BV.^2 ./ reshape(fluxavg(input.BV.^2, input.JV), :, 1)
 
-            regulopt = [1e-2,0.5,1e-5,5] # this can be changed, parameters for the convergence of iterative calc of asymmetries 
+            regulopt = [1e-2,0.5,1e-5,20] # this can be changed, parameters for the convergence of iterative calc of asymmetries 
             deltan, Deltan, nn, b2sNNavg, NV = asymmetry_iterative(regulopt, nr, input.theta, GG, UU, input.Ai, input.Aimp, input.Zi, input.Zimp, input.Te_Ti, Machi2, input.R0, nuz, input.BV, input.RV, input.JV, input.FV, input.dpsidx, AsymPhi, AsymN, b2, input.nat_asym)
                                                           
             b2snnavg = fluxavg(b2 ./ nn, input.JV)
             nnsb2avg = fluxavg(nn ./ b2, input.JV)
                         
             CgeoG = nnsb2avg .- 1 ./ b2snnavg
-            CgeoU = fluxavg(nn ./ NV, input.JV) .- b2sNNavg ./ b2snnavg
+            CgeoU = fluxavg(nn ./ NV, input.JV) .- (b2sNNavg ./ b2snnavg)
             CclG  = nnsb2avg
             
         else
@@ -206,11 +208,7 @@ function compute_transport(input::FACITinput)
             dNH =  AsymN[1] 
             dNV =  AsymN[2]
             
-            nat_asym = true # expose this
-
-            deltan, Deltan, nn = asymmetry_analytical(input.rho, input.theta, GG, UU, eps, input.invaspct, input.qmag, nuz./wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, nat_asym)
-            @show nn[end]
-
+            deltan, Deltan, nn = asymmetry_analytical(input.rho, input.theta, GG, UU, eps, input.invaspct, input.qmag, nuz./wcz, deltaM, input.Ai, input.Aimp, input.Zi, input.Zimp, dNH, dNV, dminphia, dmajphia, input.nat_asym)
             dD2 = 0.5*(deltan.^2 + Deltan.^2)
         
             CgeoG = @. 2.0*eps*deltan + dD2 + 2.0*eps2
@@ -237,7 +235,7 @@ function compute_transport(input::FACITinput)
         
         deltan = 1 ./ e0imp .- 1
         Deltan = zeros(nr)
-        # nn     = 1 + deltan[...,None]*np.cos(theta) # poloidal distribution of the impurity density
+        nn = 1 .+ deltan .* cos.(input.theta') # poloidal distribution of the impurity density
     end
 
     Dz_PS = @. fdps * input.qmag^2 * rhoLz2 * nuz * (CgeoG/(2*eps2)) / e0imp
@@ -253,6 +251,7 @@ function compute_transport(input::FACITinput)
     Hz_CL = @. -(1.0 + (input.Zimp/input.Zi)*(C0z - 1.0)) * Dz_CL # CL coefficient of the main ion temperature gradient [m^2/s]
 
     output = FACIToutput()
+    output.rho = input.rho
 
     output.Dz = @. Dz_PS + Dz_BP + Dz_CL
     output.Kz = @. Kz_PS + Kz_BP + Kz_CL
@@ -294,8 +293,6 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
     asym_err = zeros(nr)
     
     theta_new = collect(range(0, 2*pi, length(theta) + 1)[1:end-1]) #poloidal coordinate grid without repeating 0 at 2pi
-    #thetalong = np.concatenate((theta-2*np.pi,theta,theta+2*np.pi))
-
     Factrot0 = (Aimp/Ai)*Machi2/R0^2
     
     if nat_asym
@@ -480,14 +477,14 @@ function facs(Z, A, ft, Mzstar, rotation_model)
     end
     
     f1 = @. (1.74*(1-0.028*A) + 10.25/(1 + A/3.0)^2.8) - 0.423*(1-0.136*A)*ft^(5/4)
-    f2 = @. (88.28389935 + 10.50852772*Z)/(1 + 0.2157175*Z^2.57338463)
+    f2 = (88.28389935 .+ 10.50852772 .* Z) ./ (1 .+ 0.2157175 .* Z .^ 2.57338463)
     f3 = @. (-4.45719179e+06 + 2.72813878e+06*Z)/(1+5.26716920e+06*Z^8.33610108e-01)
     
     if rotation_model == 2
         f2 = @. f2 * exp(-10*Mzstar^2)
         f3 = @. f3 * (1 + (1 + 1.86e6*ft^11.07*(1-ft)^7.36)*Mzstar^4)*exp(-0.8*Mzstar^2)
     end
-    
+
     fg1 = @. -1.4*ft^7 + 2.23*(1-0.31*ft)
     fg2 = @. 2.8*(1-0.63*ft)
     fg3 = @. 3.5*(1 - ft)/fg2
@@ -495,7 +492,7 @@ function facs(Z, A, ft, Mzstar, rotation_model)
     fg5 = @. 0.38*ft^4
     fg6 = @. 3.95*(1 + 0.424*ft*(1 - 0.65*ft))
     
-    fG = @. (1 + fg1*Mzstar^fg2)^(fg3)*(1 + 0.2*Mzstar^fg4)/(1 + fg5*Mzstar^fg6)
+    fG = (1 .+ fg1.*Mzstar.^fg2).^(fg3) .* (1 .+ 0.2 .* Mzstar.^fg4) ./ (1 .+ fg5 .* Mzstar .^fg6)
     
     c1f = @. 2.72*(1-0.91*ft)
     c2f = @. 2.98*(1-0.471*ft)
@@ -739,7 +736,7 @@ function asymmetry_analytical(rho, theta, GG, UU, eps, invaspct, qmag, nuswcz, d
         Ae = 0
     end
     
-    AGe = Ae*GG
+    AGe = Ae.*GG
     HH = 1.0
     CD0 = -eps./UG
     QQ = CD0 .* (dNV ./ (eps)) .* (UG .- 1.0)
