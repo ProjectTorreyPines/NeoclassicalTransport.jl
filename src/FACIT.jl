@@ -327,7 +327,7 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
 
         
         while (Erreur>err && ierr<ierrmax) # iterative calculation of poloidal asymmetry
-            b2snavg = fluxavg(b2[ix,:]/nnx, JV[ix,:]) # <b^2/n>
+            b2snavg = fluxavg(b2[ix,:]./nnx, JV[ix,:]) # <b^2/n>
 
             FFF  = Apsi[ix,:].*( GG[ix,:] .+ (b2[ix,:]./NV[ix,:]).*UU[ix,:])
             GGG  = -Zimp[ix,:].*(Te_Ti[ix,:]).*(PhiV[ix,:].-PhiV[ix,1]) .+ Factrot0[ix,:].*(RV[ix,:].^2 .- RV[ix,1].^2)
@@ -375,20 +375,17 @@ function asymmetry_iterative(regulopt, nr, theta, GG, UU, Ai, Aimp, Zi, Zimp, Te
             nnya = inv(CC) * AA' * BB
             
             nny  = nnya[1:end-1,1]/fluxavg(nnya[1:end-1,1],JV[ix,:])
-            if any(isnan.(nny))
-                nny = [1e-4] # FIX THIS 
-            end
-            nny  = max(maximum(nny), 1e-5)
-            
+            nny = max.(nny, 1e-5)
+
             nnp = nnx
-            nnx = progx*nnp + (1-progx)*nny
+            nnx = progx*nnp .+ (1-progx).*nny
             
-            Err = maximum(abs.(IMAS.gradient(theta, log.(nnx) .- GGG) .- FFF .+ HHH ./ nnx))
+            Err = maximum(abs.(IMAS.gradient(theta_new, log.(nnx) .- GGG) .- FFF .+ HHH ./ nnx))
+            Error[ix,ierr] = Erreur
             
             ierr = ierr+1
-    #         #print('r/a=', cdat.rho[ix],' - ierr=',ierr,' - err=', Erreur)
                 
-            nn[ix]       = nnx
+            nn[ix,:] .= nnx
             asym_err[ix] = Err
         end
     end
