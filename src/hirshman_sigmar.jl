@@ -401,7 +401,8 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     particle_flux_i = pflux_norm[1:end-1]
 
     # assign fluxes to FluxSolution structure
-    sol = GACODE.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, 0.0)
+    T = typeof(energy_flux_e)
+    sol = GACODE.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, zero(T))
     return sol
 end
 
