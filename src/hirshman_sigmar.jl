@@ -129,8 +129,8 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
     xm = 0.5 * (x2 + x1)
     xl = 0.5 * (x2 - x1)
 
-    x = zeros(Float64, n)
-    w = zeros(Float64, n)
+    x = Vector{Float64}(undef, n)
+    w = Vector{Float64}(undef, n)
 
     # Exception for n=1 is required:
     if n == 1
@@ -140,7 +140,7 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
     end
 
     # Roots are symmetric. We only need to find half of them.
-    m = (n + 1) / 2
+    m = (n + 1) ÷ 2
 
     # Initialize to fail first do test
     z1 = -1.0
@@ -148,7 +148,6 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
 
     # Loop over roots.
     for i in 1:m
-        i = Int(i)
         z = cos(pi * (i - 0.25) / (n + 0.5))
 
         while abs(z - z1) > eps
@@ -176,6 +175,8 @@ function gauss_legendre(x1::Int, x2::Int, n::Int)
     return x, w
 end
 
+const gl011 = gauss_legendre(0, 1, 1)
+
 function gauss_integ(
     xmin::Float64,
     xmax::Float64,
@@ -188,26 +189,22 @@ function gauss_integ(
     is_globalHS::Int,
     ir_global::Int)
 
-    x0, w0 = gauss_legendre(0, 1, order)
+    if order == 1
+        x0, w0 = gl011
+    else
+        x0, w0 = gauss_legendre(0, 1, order)
+    end
 
     dx = (xmax - xmin) / n_subdiv
 
-    n_node = n_subdiv * order
-
-    x = zeros(Float64, n_subdiv * order)
-    w = zeros(Float64, n_subdiv * order)
-
+    answer = 0.0
     for i in 1:n_subdiv
         for j in 1:order
-            p = (i - 1) * order + j
-            x[p] = xmin + ((i - 1) + x0[j]) * dx
-            w[p] = w0[j] * dx
+            #p = (i - 1) * order + j
+            xp = xmin + ((i - 1) + x0[j]) * dx
+            wp = w0[j] * dx
+            answer = answer + wp * func(xp, plasma_profiles, ietype, equilibrium_geometry, is_globalHS, ir_global)
         end
-    end
-
-    answer = 0.0
-    for p in 1:n_node
-        answer = answer + w[p] * func(x[p], plasma_profiles, ietype, equilibrium_geometry, is_globalHS, ir_global)
     end
 
     return answer
@@ -389,14 +386,14 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     temp_e = 1.0 # electron temperature is 1 since all NEO temps are normalized against electron temp
     dens_e = 1.0 # electron density is 1 since all NEO densities are normalized against electron density
 
-    Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star .^ 2
-    Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star .^ 2
+    Gamma_neo_GB = dens_e * temp_e^1.5 * neo_rho_star ^ 2
+    Q_neo_GB = dens_e * temp_e^2.5 * neo_rho_star ^ 2
 
     pflux_norm = pflux_multi ./ Gamma_neo_GB
     eflux_norm = eflux_multi ./ Q_neo_GB
 
     energy_flux_e = eflux_norm[end]
-    energy_flux_i = sum(eflux_norm[1:end-1])
+    @views energy_flux_i = sum(eflux_norm[1:end-1])
     particle_flux_e = pflux_norm[end]
     particle_flux_i = pflux_norm[1:end-1]
 
