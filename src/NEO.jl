@@ -42,6 +42,7 @@ function run_neo(input_neo::InputNEO)
             end
         end
     end
+
     loc_first_tgyro = (4 * input_neo.N_SPECIES * 2) + 1
     tgyro_fluxes = tmp_fluxes[loc_first_tgyro:end]
 
@@ -61,6 +62,9 @@ function run_neo(input_neo::InputNEO)
 
     # assign fluxes to FluxSolution structure
     sol = GACODE.FluxSolution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+
+    rm(folder; force=true, recursive=true)
+
     return sol
 end
 
