@@ -171,6 +171,7 @@ function compute_transport(input::FACITinput)
         nn = ones((nr, length(input.theta))) # poloidal distribution of the impurity density
         
         e0imp = 1.0
+        f_conv_fsa = 0.0
 
     elseif input.rotation_model == 1
         UU = @. -(input.Zimp/input.Zi)*(C0z + ki)*(grad_ln_Ti*amin)
@@ -211,6 +212,8 @@ function compute_transport(input::FACITinput)
         end
 
         e0imp = 1.0
+        f_conv_fsa = 0.0
+
     
     elseif input.rotation_model == 2
         
@@ -221,8 +224,10 @@ function compute_transport(input::FACITinput)
         
         if input.fsaout
             e0imp = fluxavg(exp.(reshape(Mzstar, :, 1).^2 .* (input.RV.^2 .- input.RV[:,1].^2)./input.R0^2), input.JV) 
+            f_conv_fsa = IMAS.gradient(amin*input.rho, e0imp) ./ e0imp 
         else
             e0imp = ones(nr)
+            f_conv_fsa = 0.0
         end
         
         
@@ -235,24 +240,53 @@ function compute_transport(input::FACITinput)
     Kz_PS = @. (input.Zimp / input.Zi) * Dz_PS
     Hz_PS = @. (-(1 + (input.Zimp / input.Zi) * (C0z - 1)) + (CgeoU/CgeoG)*(input.Zimp/input.Zi)*(C0z + ki))* Dz_PS
 
+    Vrz_PS = @. -Dz_PS*grad_ln_Nimp + Kz_PS*grad_ln_Ni + Hz_PS*grad_ln_Ti # PS radial flux per particle [m/s]
+    Vconv_PS = @. Kz_PS*grad_ln_Ni + Hz_PS*grad_ln_Ti + f_conv_fsa*Dz_PS # PS convective velocity [m/s]
+
     Dz_BP = @. (1.5 * (qe * input.Ti) / (input.Zimp ^ 2 * qe ^ 2 * input.FV ^ 2 * input.Nimp)) * (1 / (1 / K11i + 1 / K11z)) / e0imp
     Kz_BP = @. (input.Zimp / input.Zi) * Dz_BP
     Hz_BP = @. fhbp * ((input.Zimp / input.Zi) * (K12i / K11i - fv) - (K12z / K11z - fv)) * Dz_BP
+
+    Vrz_BP = @. -Dz_BP*grad_ln_Nimp + Kz_BP*grad_ln_Ni + Hz_BP*grad_ln_Ti  # BP radial flux per particle [m/s]
+    Vconv_BP = @. Kz_BP*grad_ln_Ni + Hz_BP*grad_ln_Ti + f_conv_fsa*Dz_BP # BP convective velocity [m/s]
 
     Dz_CL = @. (CclG * 2 * eps2 / CgeoG) * Dz_PS / (2 * input.qmag^2) # CL diffusion coefficient [m^2/s]
     Kz_CL = @. (input.Zimp / input.Zi) * Dz_CL # CL coefficient of the main ion density gradient [m^2/s]
     Hz_CL = @. -(1.0 + (input.Zimp/input.Zi)*(C0z - 1.0)) * Dz_CL # CL coefficient of the main ion temperature gradient [m^2/s]
 
+    Vrz_CL = @. -Dz_CL*grad_ln_Nimp + Kz_CL*grad_ln_Ni + Hz_CL*grad_ln_Ti # CL radial flux per particle [m/s]
+    Vconv_CL = @. Kz_CL*grad_ln_Ni + Hz_CL*grad_ln_Ti + f_conv_fsa*Dz_CL # CL convective velocity [m/s]
+
     output = FACIToutput()
     output.rho = input.rho
 
-    output.Dz = @. Dz_PS + Dz_BP + Dz_CL
-    output.Kz = @. Kz_PS + Kz_BP + Kz_CL
-    output.Hz = @. Hz_PS + Hz_BP + Hz_CL
+    Dz = @. Dz_PS + Dz_BP + Dz_CL
+    Kz = @. Kz_PS + Kz_BP + Kz_CL
+    Hz = @. Hz_PS + Hz_BP + Hz_CL
 
-    output.Vrz = -output.Dz .* grad_ln_Nimp .+ output.Kz .* grad_ln_Ni .+ output.Hz .* grad_ln_Ti
-    output.Vconv = output.Kz .* grad_ln_Ni .+ output.Hz .* grad_ln_Ti
-    output.Flux_z = output.Vrz .* input.Nimp
+    Vrz = -output.Dz .* grad_ln_Nimp .+ output.Kz .* grad_ln_Ni .+ output.Hz .* grad_ln_Ti
+    Vconv = output.Kz .* grad_ln_Ni .+ output.Hz .* grad_ln_Ti .+ f_conv_fsa.*Dz
+    Flux_z = output.Vrz .* input.Nimp
+
+    # Neoclassical
+
+    Dz_ncl = Dz_PS .+ Dz_BP # neoclassical diffusion coefficient [m^2/s]
+    Kz_ncl = Kz_PS .+ Kz_BP # neoclassical of the main ion density gradient [m^2/s]
+    Hz_ncl = Hz_PS .+ Hz_BP # neoclassical of the main ion temperature gradient [m^2/s]
+
+    Vconv_ncl = Kz_ncl .* grad_ln_Ni .+ Hz_ncl .* grad_ln_Ti .+ f_conv_fsa .* Dz_ncl # convective velocity [m/s]
+    Vrz_ncl = Vrz_PS .+ Vrz_BP   # radial flux per particle [m/s]
+
+    Flux_z_ncl = Vrz_ncl .* input.Nimp # radial neoclassical flux [1/(m s)]
+
+    output.Dz = Dz_ncl
+    output.Kz = Kz_ncl
+    output.Hz = Hz_ncl 
+
+    output.Vconv = Vconv_ncl 
+    output.Vrz = Vrz_ncl 
+
+    output.Flux_z = Flux_z_ncl
 
     return output
 end
@@ -425,6 +459,7 @@ function collision_times(Zi, Zimp, Ni, Nimp, Ti, Ai, Aimp)
     Lnimpimp = 23 .- log.(Zimp.^3 .* sqrt.(2 .* (Nimp ./ 1e6))) .+ 1.5 .* log.(Ti)
 
     Tauii = (eps_pi_fac * sqrt.(mi) .* Ti.^1.5) ./ (Zi.^4 .* Ni .* Lnii)
+    Tauii *= 1/(3*sqrt(2*π)/4)
     Tauimpi = sqrt(Aimp / Ai) .* ((Zi.^2 .* Lnii) ./ (Zimp.^2 .* Lnimpi)) .* Tauii
     Tauiimp = ((Zi.^2 .* Ni .* Lnii) ./ (Zimp.^2 .* Nimp .* Lnimpi)) .* Tauii
     Tauimpimp = sqrt(Aimp / Ai) .* ((Zi.^4 .* Ni .* Lnii) ./ (Zimp.^4 .* Nimp .* Lnimpimp)) .* Tauii
