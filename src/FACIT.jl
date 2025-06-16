@@ -112,13 +112,6 @@ function FACITinput(
         BV = B0 ./ (1 .+ reshape(eps, :, 1) .* reshape(cos.(theta), 1, :))
     end
 
-    Dz = zeros(nr)
-    Kz = zeros(nr)
-    Hz = zeros(nr)
-    Vconv = zeros(nr)
-    Vrz = zeros(nr)
-    Flux_z = zeros(nr)
-
     return FACITinput(rho, Zimp, Aimp, Zi, Ai, Ti, Ni, Nimp, Machi, Zeff,
                       gradTi, gradNi, gradNimp, invaspct, B0, R0, qmag, rotation_model, Te_Ti, RV, FV, ZV, BV,
                       JV, dpsidx, fsaout, full_geom, fH, bC, sigH, TperpTpar_axis, theta, nat_asym)
@@ -464,18 +457,6 @@ function ki_f(nui_star, ft, Zeff, Machi)
 end
 
 function facs(Z, A, ft, Mzstar, rotation_model)
-    if typeof(Z) <: AbstractArray && typeof(Mzstar) <: AbstractArray
-        if size(Z) != size(Mzstar)
-            dims = max.(size(Z), size(Mzstar))
-            Z = ones(eltype(Z), dims) .* Z
-            Mzstar = ones(eltype(Mzstar), dims) .* Mzstar
-        end
-    elseif typeof(Z) <: AbstractArray
-        Mzstar = ones(eltype(Z), size(Z)) .* Mzstar
-    elseif typeof(Mzstar) <: AbstractArray
-        Z = ones(eltype(Mzstar), size(Mzstar)) .* Z
-    end
-    
     f1 = @. (1.74*(1-0.028*A) + 10.25/(1 + A/3.0)^2.8) - 0.423*(1-0.136*A)*ft^(5/4)
     f2 = (88.28389935 .+ 10.50852772 .* Z) ./ (1 .+ 0.2157175 .* Z .^ 2.57338463)
     f3 = @. (-4.45719179e+06 + 2.72813878e+06*Z)/(1+5.26716920e+06*Z^8.33610108e-01)
