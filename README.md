@@ -1,4 +1,4 @@
-# NEO.jl
+# NeoclassicalTransport.jl
 
 Calls the drift-kinetic solver NEO for high-accuracy neoclassical calculations.
 It also implements Chang-Hinton and Hirshman-Sigmar neoclassical calculations.
@@ -13,6 +13,6 @@ in the platform-specific make file found in `$GACODE_ROOT/platform/build/make.in
 `$GACODE_ROOT/platform/exec/exec.OSX_MONTEREY`.
 
 ## Online documentation
-For more details, see the [online documentation](https://projecttorreypines.github.io/NEO.jl/dev).
+For more details, see the [online documentation](https://projecttorreypines.github.io/NeoclassicalTransport.jl/dev).
 
-![Docs](https://github.com/ProjectTorreyPines/NEO.jl/actions/workflows/make_docs.yml/badge.svg)
+![Docs](https://github.com/ProjectTorreyPines/NeoclassicalTransport.jl/actions/workflows/make_docs.yml/badge.svg)

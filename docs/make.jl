@@ -1,15 +1,15 @@
-using Documenter, NEO
+using Documenter, NeoclassicalTransport
 
 # Call functions
 open(joinpath(@__DIR__, "src/api.md"), "w") do f
     println(f, "# API Reference\n")
-    for page in keys(NEO.document)
+    for page in keys(NeoclassicalTransport.document)
         if page == :Expressions
             continue
         end
         println(f, "## $page\n")
         println(f, "```@docs")
-        for item in NEO.document[page]
+        for item in NeoclassicalTransport.document[page]
             println(f, "$item")
         end
         println(f, "```")
@@ -17,9 +17,9 @@ open(joinpath(@__DIR__, "src/api.md"), "w") do f
 end
 
 makedocs(;
-    modules=[NEO],
+    modules=[NeoclassicalTransport],
     format=Documenter.HTML(;analytics="G-65D8V8C8VQ"),
-    sitename="NEO",
+    sitename="NeoclassicalTransport",
     checkdocs=:none,
     pages=["index.md", "api.md", "License" => "license.md", "Notice" => "notice.md"],
     warnonly=true
@@ -36,7 +36,7 @@ makedocs(;
 # For testing purposes, the devbranch argument can be set to WIP branch like "docs".
 # While merging with master, the devbranch argument should be set to "master".
 deploydocs(;
-    repo="github.com/ProjectTorreyPines/NEO.jl.git",
+    repo="github.com/ProjectTorreyPines/NeoclassicalTransport.jl.git",
     target="build",
     branch="gh-pages",
     devbranch="master",

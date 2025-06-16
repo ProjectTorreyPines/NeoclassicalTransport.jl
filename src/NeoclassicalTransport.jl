@@ -1,4 +1,4 @@
-module NEO
+module NeoclassicalTransport
 
 using IMAS
 import GACODE
