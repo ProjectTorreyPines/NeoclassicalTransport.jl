@@ -9,6 +9,8 @@ include("hirshman_sigmar.jl")
 
 include("chang_hinton.jl")
 
+include("FACIT.jl")
+
 """
     run_neo(input_neo::InputNEO)
 
