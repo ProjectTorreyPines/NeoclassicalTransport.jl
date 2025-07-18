@@ -54,11 +54,11 @@ function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.
 end
 
 """
-    get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+    get_plasma_profiles(eqt::IMAS.equilibrium__time_slice{T}, cp1d::IMAS.core_profiles__profiles_1d{T}) where {T<:Real}
 
 Populates plasma_profiles structure with profile data from cp1d using NEO normalizations
 """
-function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice{T}, cp1d::IMAS.core_profiles__profiles_1d{T}) where {T<:Real}
     n = length(cp1d.grid.rho_tor_norm)
 
     eqt1d = eqt.profiles_1d
@@ -83,14 +83,14 @@ function get_plasma_profiles(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_
     t_norm = Te
     nu_norm = sqrt.(k .* Te ./ md) ./ a
 
-    Z = Vector{Float64}(undef, num_ions + 1)
-    mass = Vector{Float64}(undef, num_ions + 1)
-    dens = zeros(Float64, n, num_ions + 1)
-    temp = zeros(Float64, n, num_ions + 1)
-    vth = zeros(Float64, n, num_ions + 1)
-    nu = zeros(Float64, n, num_ions + 1)
-    dlnndr = zeros(Float64, n, num_ions + 1)
-    dlntdr = zeros(Float64, n, num_ions + 1)
+    Z = Vector{T}(undef, num_ions + 1)
+    mass = Vector{T}(undef, num_ions + 1)
+    dens = zeros(T, n, num_ions + 1)
+    temp = zeros(T, n, num_ions + 1)
+    vth = zeros(T, n, num_ions + 1)
+    nu = zeros(T, n, num_ions + 1)
+    dlnndr = zeros(T, n, num_ions + 1)
+    dlntdr = zeros(T, n, num_ions + 1)
     for i in 1:num_ions
         T1 = cp1d.ion[i].temperature[Int(ceil(end / 2))]
         Z[i] = IMAS.avgZ(cp1d.ion[i].element[1].z_n, T1)
@@ -280,12 +280,12 @@ end
 
 function compute_HS(
     ir::Int,
-    eqt::IMAS.equilibrium__time_slice,
-    cp1d::IMAS.core_profiles__profiles_1d,
+    eqt::IMAS.equilibrium__time_slice{T},
+    cp1d::IMAS.core_profiles__profiles_1d{T},
     plasma_profiles::PlasmaProfiles,
     equilibrium_geometry::EquilibriumGeometry;
     rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt)
-)
+) where {T<:Real}
     rmin = equilibrium_geometry.rmin
     a = equilibrium_geometry.a
     q = equilibrium_geometry.q
@@ -309,9 +309,9 @@ function compute_HS(
     omega_fac = 1.0 / Bmag2_avg[ir]
     HS_I_div_psip = -f[ir] * q[ir] / rmin[ir]
 
-    nux0 = zeros(Float64, n_species)
-    nux2 = zeros(Float64, n_species)
-    nux4 = zeros(Float64, n_species)
+    nux0 = zeros(T, n_species)
+    nux2 = zeros(T, n_species)
+    nux4 = zeros(T, n_species)
 
     for is_global in 1:n_species
         for ietype in 1:3
@@ -335,8 +335,8 @@ function compute_HS(
         sum_nm += mass[is_global] * dens[ir, is_global] * nux0[is_global]
     end
 
-    pflux_multi = zeros(Float64, n_species)
-    eflux_multi = zeros(Float64, n_species)
+    pflux_multi = zeros(T, n_species)
+    eflux_multi = zeros(T, n_species)
     for is_global in 1:n_species
         A1 = -dlnndr[ir, is_global] + (1.5 * dlntdr[ir, is_global])
         A2 = -dlntdr[ir, is_global]
@@ -373,10 +373,10 @@ function compute_HS(
 
 end
 
-function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int;
+function HS_to_GB(HS_solution::Tuple{Vector{T},Vector{T}}, eqt::IMAS.equilibrium__time_slice{T}, cp1d::IMAS.core_profiles__profiles_1d{T}, rho::Int;
                   rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt),
                   rmin::Vector{<:Real} = GACODE.r_min_core_profiles(eqt.profiles_1d, cp1d.grid.rho_tor_norm),
-                  )
+                  ) where {T<:Real}
     pflux_multi, eflux_multi = HS_solution
 
     a = rmin[end]
@@ -398,7 +398,6 @@ function HS_to_GB(HS_solution::Tuple{Vector{Float64},Vector{Float64}}, eqt::IMAS
     particle_flux_i = pflux_norm[1:end-1]
 
     # assign fluxes to FluxSolution structure
-    T = typeof(energy_flux_e)
     sol = GACODE.FluxSolution(energy_flux_e, energy_flux_i, particle_flux_e, particle_flux_i, zero(T))
     return sol
 end
