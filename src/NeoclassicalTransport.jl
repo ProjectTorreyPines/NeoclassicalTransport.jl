@@ -63,7 +63,8 @@ function run_neo(input_neo::InputNEO)
     ion_total_momentum_flux = sum(tgyro_fluxes[momentum_index(i_index)])
 
     # assign fluxes to FluxSolution structure
-    sol = GACODE.FluxSolution(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
+    T = Float64
+    sol = GACODE.FluxSolution{T}(electrons_energy_flux, ion_total_energy_flux, electrons_particle_flux, ion_particle_flux, ion_total_momentum_flux)
 
     rm(folder; force=true, recursive=true)
 

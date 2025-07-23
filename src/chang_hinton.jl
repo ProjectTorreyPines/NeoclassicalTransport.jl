@@ -10,10 +10,10 @@ Calculates the neoclassical flux using Chang-Hinton model which has been modifie
 Ref: C.S. Chang, F.L. Hinton, Phys. Fluids 25, 1493–1494 (1982), https://doi.org/10.1063/1.863934
 """
 function changhinton(
-    eqt::IMAS.equilibrium__time_slice,
-    cp1d::IMAS.core_profiles__profiles_1d,
+    eqt::IMAS.equilibrium__time_slice{T},
+    cp1d::IMAS.core_profiles__profiles_1d{T},
     rho_fluxmatch::Real,
-    iion::Integer)
+    iion::Integer) where {T<:Real}
 
     eqt1d = eqt.profiles_1d
     ions = cp1d.ion
@@ -109,7 +109,6 @@ function changhinton(
     qneo_gb = neo_rho_star_in^2
 
     # assign fluxes to FluxSolution structure
-    T = typeof(efluxi)
-    sol = GACODE.FluxSolution(zero(T), efluxi / qneo_gb, zero(T), T[], zero(T))
+    sol = GACODE.FluxSolution{T}(zero(T), efluxi / qneo_gb, zero(T), T[], zero(T))
     return sol
 end
