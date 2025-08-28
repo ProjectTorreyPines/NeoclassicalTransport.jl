@@ -1,7 +1,7 @@
 name = "NeoclassicalTransport"
 uuid = "e630bb45-bea9-4e62-953e-b44d0741ac01"
 authors = ["adrianaghiozzi <67669644+adrianaghiozzi@users.noreply.github.com>"]
-version = "1.0.1"
+version = "1.0.2"
 
 [deps]
 GACODE = "bb074124-7a58-47ce-bd41-6b7098184f23"
