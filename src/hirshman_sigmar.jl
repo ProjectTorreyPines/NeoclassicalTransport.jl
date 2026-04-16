@@ -27,7 +27,7 @@ end
 
 Populates EquilibriumGeometry structure with equilibrium quantities from eqt
 """
-function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d)
+function get_equilibrium_geometry(eqt::IMAS.equilibrium__time_slice{T}, cp1d::IMAS.core_profiles__profiles_1d{T}) where {T<:Real}
     eqt1d = eqt.profiles_1d
 
     rho_tor_norm = cp1d.grid.rho_tor_norm
@@ -178,8 +178,8 @@ end
 const gl011 = gauss_legendre(0, 1, 1)
 
 function gauss_integ(
-    xmin::Float64,
-    xmax::Float64,
+    xmin::Real,
+    xmax::Real,
     func::Function,
     order::Int,
     n_subdiv::Int,
@@ -197,7 +197,7 @@ function gauss_integ(
 
     dx = (xmax - xmin) / n_subdiv
 
-    answer = 0.0
+    answer = zero(eltype(plasma_profiles.nu))
     for i in 1:n_subdiv
         for j in 1:order
             #p = (i - 1) * order + j
@@ -210,7 +210,7 @@ function gauss_integ(
     return answer
 end
 
-function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, plasma_profiles::PlasmaProfiles)
+function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Real, plasma_profiles::PlasmaProfiles)
     Z = plasma_profiles.Z
     dens = plasma_profiles.dens
     vth = plasma_profiles.vth
@@ -237,7 +237,7 @@ function get_coll_freqs(ir_loc::Int, is_loc::Int, js_loc::Int, ene::Float64, pla
     return nu_d
 end
 
-function myHSenefunc(x::Float64, plasma_profiles::PlasmaProfiles, ietype::Int, equilibrium_geometry::EquilibriumGeometry, is_globalHS::Int, ir_global::Int)
+function myHSenefunc(x::Real, plasma_profiles::PlasmaProfiles, ietype::Int, equilibrium_geometry::EquilibriumGeometry, is_globalHS::Int, ir_global::Int)
     rmin = equilibrium_geometry.rmin
     rmaj = equilibrium_geometry.rmaj
     a = equilibrium_geometry.a
@@ -258,7 +258,7 @@ function myHSenefunc(x::Float64, plasma_profiles::PlasmaProfiles, ietype::Int, e
 
     eps = rmin[ir_global] / (rmaj[ir_global] .* a)
 
-    nu_d_tot = 0.0
+    nu_d_tot = zero(eltype(nu))
     for js in eachindex(plasma_profiles.Z)
         nu_d = get_coll_freqs(ir_global, is_globalHS, js, ene, plasma_profiles)
         nu_d_tot += nu_d * nu[ir_global, is_globalHS]
@@ -280,9 +280,9 @@ end
 
 function compute_HS(
     ir::Int,
-    eqt::IMAS.equilibrium__time_slice{T},
-    cp1d::IMAS.core_profiles__profiles_1d{T},
-    plasma_profiles::PlasmaProfiles,
+    eqt::IMAS.equilibrium__time_slice,
+    cp1d::IMAS.core_profiles__profiles_1d,
+    plasma_profiles::PlasmaProfiles{T},
     equilibrium_geometry::EquilibriumGeometry;
     rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt)
 ) where {T<:Real}
@@ -330,7 +330,7 @@ function compute_HS(
         end
     end
 
-    sum_nm = 0.0
+    sum_nm = zero(T)
     for is_global in 1:n_species
         sum_nm += mass[is_global] * dens[ir, is_global] * nux0[is_global]
     end
@@ -340,9 +340,6 @@ function compute_HS(
     for is_global in 1:n_species
         A1 = -dlnndr[ir, is_global] + (1.5 * dlntdr[ir, is_global])
         A2 = -dlntdr[ir, is_global]
-
-        pflux_multi[is_global] = 0.0
-        eflux_multi[is_global] = 0.0
 
         L_a =
             nux0[is_global] * omega_fac * HS_I_div_psip^2 * rho[ir]^2 * ftrap[ir] * dens[ir, is_global] * temp[ir, is_global] * mass[is_global] /
@@ -373,7 +370,7 @@ function compute_HS(
 
 end
 
-function HS_to_GB(HS_solution::Tuple{Vector{T},Vector{T}}, eqt::IMAS.equilibrium__time_slice{T}, cp1d::IMAS.core_profiles__profiles_1d{T}, rho::Int;
+function HS_to_GB(HS_solution::Tuple{Vector{T},Vector{T}}, eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, rho::Int;
                   rho_s::Vector{<:Real} = GACODE.rho_s(cp1d, eqt),
                   rmin::Vector{<:Real} = GACODE.r_min_core_profiles(eqt.profiles_1d, cp1d.grid.rho_tor_norm),
                   ) where {T<:Real}
