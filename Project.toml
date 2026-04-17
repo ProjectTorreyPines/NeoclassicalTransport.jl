@@ -1,7 +1,7 @@
 name = "NeoclassicalTransport"
 uuid = "e630bb45-bea9-4e62-953e-b44d0741ac01"
 authors = ["adrianaghiozzi <67669644+adrianaghiozzi@users.noreply.github.com>"]
-version = "1.0.3"
+version = "1.0.4"
 
 [deps]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
