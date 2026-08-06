@@ -35,3 +35,5 @@ Manifest.toml
 # temp/test files
 test.json
 asd.jl
+# site-built serial NEO binary (build with utilities/serial_neo/Makefile)
+utilities/serial_neo/neo_serial
