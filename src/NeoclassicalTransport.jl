@@ -16,6 +16,54 @@ include("chang_hinton.jl")
 include("FACIT.jl")
 
 """
+    build_serial_neo(; force=false) -> path
+
+Build the serial (no-MPI) NEO binary from `utilities/serial_neo/` against the
+user's own gacode tree and return its path. Requires a sourced GACODE
+environment (`GACODE_ROOT`/`GACODE_PLATFORM` set, neo built). No-op if the
+binary already exists (`force=true` rebuilds). When the package install is
+read-only, builds into a per-version scratch directory instead.
+"""
+function build_serial_neo(; force::Bool=false)
+    for var in ("GACODE_ROOT", "GACODE_PLATFORM")
+        haskey(ENV, var) || error("build_serial_neo: $var is not set — source your GACODE environment first")
+    end
+    neo_lib = joinpath(ENV["GACODE_ROOT"], "neo", "src", "neo_lib.a")
+    isfile(neo_lib) || error("build_serial_neo: $neo_lib not found — build gacode's neo first")
+
+    srcdir = joinpath(_pkg_root(), "utilities", "serial_neo")
+    builddir = srcdir
+    if !_dir_writable(srcdir)
+        builddir = joinpath(_model_cache_dir(), "serial_neo")
+        mkpath(builddir)
+        for f in ("neo_serial.f90", "Makefile")
+            cp(joinpath(srcdir, f), joinpath(builddir, f); force=true)
+        end
+    end
+
+    binary = joinpath(builddir, "neo_serial")
+    if force || !isfile(binary)
+        run(pipeline(`make -C $builddir`; stdout=devnull))
+    end
+    isfile(binary) || error("build_serial_neo: build did not produce $binary")
+    return binary
+end
+
+"""
+    use_serial_neo!(; force=false) -> path
+
+[`build_serial_neo`](@ref) + set `ENV["NEO_EXECUTABLE"]`, so subsequent
+[`run_neo`](@ref) calls invoke the serial binary directly — the one-call setup
+for running full-NEO comparisons on login nodes where the `neo -e` wrapper
+cannot launch.
+"""
+function use_serial_neo!(; force::Bool=false)
+    binary = build_serial_neo(; force)
+    ENV["NEO_EXECUTABLE"] = binary
+    return binary
+end
+
+"""
     run_neo(input_neo::InputNEO; neo_executable=get(ENV, "NEO_EXECUTABLE", ""))
 
 Saves input.neo file to a temporary directory, runs NEO on that directory and parses output.

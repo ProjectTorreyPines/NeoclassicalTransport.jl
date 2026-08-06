@@ -46,10 +46,11 @@ Caveats:
   compare `run_neonn(input_neo)` vs `run_neo(input_neo)` at a few radii.
   (Cross-checked on actual training inputs: ≤1.5% per channel at mid-radius
   against full Fokker-Planck NEO.) On login nodes where the `neo -e` wrapper
-  cannot launch (srun/mpirun dispatch), build the serial no-MPI NEO in
-  `utilities/serial_neo/` (`make` with the GACODE env sourced) and set
-  `NEO_EXECUTABLE` to it — `run_neo` then invokes it directly
-  (`GACODE_ROOT` must be set for the input parser).
+  cannot launch (srun/mpirun dispatch), source your GACODE environment and call
+  `NeoclassicalTransport.use_serial_neo!()` — this builds the serial no-MPI NEO
+  from `utilities/serial_neo/` against your gacode tree (once) and points
+  `run_neo` at it via `NEO_EXECUTABLE`. The comparison notebook does this
+  automatically when it detects `GACODE_ROOT`.
 
 Notebooks:
 - `examples/run_NEONN.ipynb` — run NEO-NN and compare against full NEO,
