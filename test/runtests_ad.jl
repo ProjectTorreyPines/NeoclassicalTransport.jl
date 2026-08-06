@@ -143,3 +143,30 @@ end
         println("∇Qi (FD): $grad_fd")
     end
 end
+
+# ---- NEO-NN: ForwardDiff through the ensemble forward pass ----
+# The NN layer is generic in eltype (Float64 weights x Dual inputs), so
+# gradients of the surrogate fluxes w.r.t. any feature come for free.
+@testset "NEO-NN AD" begin
+    ens = NeoclassicalTransport.loadmodelonce("neonn_tgyro_d3d+mastu+nstx_flux_v1")
+    ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, ir)
+    nn = NeoclassicalTransport.InputNEONN(ineo)
+    xnames_val = NeoclassicalTransport._get_xnames_without_log10_suffix(ens)
+    x0 = NeoclassicalTransport._extract_fields!(zeros(length(ens.xnames)), nn, xnames_val)
+
+    iy = findfirst(==("OUT_eflux_tgyro_ion1"), ens.ynames)
+    nn_Qi(x) = NeoclassicalTransport.flux_array(ens, x; warn_nn_train_bounds=false)[iy]
+
+    grad_ad = ForwardDiff.gradient(nn_Qi, x0)
+    @test all(isfinite, grad_ad)
+    @test any(!iszero, grad_ad)
+
+    # central-difference cross-check on the bulk-ion temperature gradient feature
+    k = findfirst(==("DLNTDR_1"), ens.xnames)
+    hx = 1e-4 * max(abs(x0[k]), 1.0)
+    xp = copy(x0); xp[k] += hx
+    xm = copy(x0); xm[k] -= hx
+    fd = (nn_Qi(xp) - nn_Qi(xm)) / (2hx)
+    @test isapprox(grad_ad[k], fd; rtol=1e-4)
+    println("dQi/dDLNTDR_1 (AD): $(grad_ad[k])  (FD): $fd")
+end

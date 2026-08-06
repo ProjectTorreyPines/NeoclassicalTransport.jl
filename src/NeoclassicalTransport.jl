@@ -5,6 +5,10 @@ import GACODE
 
 include("input_neo.jl")
 
+include("models.jl")
+
+include("neo_nn.jl")
+
 include("hirshman_sigmar.jl")
 
 include("chang_hinton.jl")
