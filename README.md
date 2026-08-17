@@ -9,15 +9,15 @@ NOTE: Running NEO requires GACODE executables to be locally installed.
 ## NEO-NN
 
 Ensemble neural-network surrogates (20 members each) trained on Fokker-Planck NEO
-databases generated with [runNEOdb](https://github.com/ProjectTorreyPines/runNEOdb),
-shipped in `models/` via Git LFS:
+databases, shipped in `models/` via Git LFS:
 
 | model | devices | outputs |
 |---|---|---|
-| `neonn_tgyro_d3d+mastu+nstx_flux_v1` (default) | DIII-D + MAST-U + NSTX | 9 gyroBohm fluxes (p/e/m × ion1/ion2/elec) |
-| `neonn_tgyro_d3d+mastu+nstx_flow_v1` (default) | DIII-D + MAST-U + NSTX | vpol × 3 species + jpar |
-| `neonn_tgyro_d3d_{flux,flow}_v1` | DIII-D only | same |
-| `neonn_tgyro_mastu+nstx_{flux,flow}_v1` | MAST-U + NSTX | same |
+| `neonn_d3d+mastu+nstx_flux` (default) | DIII-D + MAST-U + NSTX | 9 gyroBohm fluxes (p/e/m × ion1/ion2/elec) |
+| `neonn_d3d+mastu+nstx_flow` (default) | DIII-D + MAST-U + NSTX | vpol × 3 species + jpar |
+| `neonn_d3d_{flux,flow}` | DIII-D only | same |
+| `neonn_mastu+nstx_{flux,flow}` | MAST-U + NSTX | same |
+| `neonn_d3dedge_{flux,flow}` | DIII-D, edge radii (rho 0.80-0.99) | same |
 
 ```julia
 using NeoclassicalTransport

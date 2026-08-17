@@ -37,13 +37,13 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
 
     @testset "neo_nn.jl" begin
-        # --- model loading: all 6 shipped ensembles
-        for dev in ("d3d", "mastu+nstx", "d3d+mastu+nstx"), grp in ("flux", "flow")
-            name = "neonn_tgyro_$(dev)_$(grp)_v1"
+        # --- model loading: all 8 shipped ensembles
+        for dev in ("d3d", "d3dedge", "mastu+nstx", "d3d+mastu+nstx"), grp in ("flux", "flow")
+            name = "neonn_$(dev)_$(grp)"
             @test name in NeoclassicalTransport.available_models()
             ens = NeoclassicalTransport.loadmodelonce(name)
             @test length(ens.models) == 20
-            @test length(ens.xnames) == (dev == "d3d" ? 24 : 25)  # d3d nets lack TEMP_2
+            @test length(ens.xnames) == (startswith(dev, "d3d") && dev != "d3d+mastu+nstx" ? 24 : 25)  # d3d-only nets lack TEMP_2
             @test length(ens.ynames) == (grp == "flux" ? 9 : 4)
             # every feature must be constructible from InputNEONN
             for x in ens.xnames
@@ -111,14 +111,14 @@ cp1d = dd.core_profiles.profiles_1d[];
 
         # --- joint (25-feature) vs d3d (24-feature) nets: same input, consistent physics.
         # Smoke check on feature extraction/conventions for both signatures, not accuracy.
-        sols_d3d = NeoclassicalTransport.run_neonn(input_neos; model_filename="neonn_tgyro_d3d_flux_v1", warn_nn_train_bounds=false)
+        sols_d3d = NeoclassicalTransport.run_neonn(input_neos; model_filename="neonn_d3d_flux", warn_nn_train_bounds=false)
         for (s_joint, s_d3d) in zip(sols, sols_d3d)
             @test sign(s_joint.ENERGY_FLUX_i) == sign(s_d3d.ENERGY_FLUX_i)
             @test isapprox(s_joint.ENERGY_FLUX_i, s_d3d.ENERGY_FLUX_i; rtol=1.0)
         end
 
         # --- flux/flow model mix-up guard
-        @test_throws ErrorException NeoclassicalTransport.run_neonn(input_neos[1]; model_filename="neonn_tgyro_d3d+mastu+nstx_flow_v1")
-        @test_throws ErrorException NeoclassicalTransport.run_neonn_flow(input_neos[1]; model_filename="neonn_tgyro_d3d+mastu+nstx_flux_v1")
+        @test_throws ErrorException NeoclassicalTransport.run_neonn(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flow")
+        @test_throws ErrorException NeoclassicalTransport.run_neonn_flow(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flux")
     end
 end

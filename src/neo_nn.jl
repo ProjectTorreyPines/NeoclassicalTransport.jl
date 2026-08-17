@@ -2,8 +2,7 @@
 #  NEO-NN inference
 #= ================ =#
 # Neural-network surrogates for NEO (Fokker-Planck) neoclassical transport,
-# trained with TrainFluxNN on runNEOdb databases (d3d, mastu, nstx). Mirrors
-# the TGLF-NN implementation in TurbulentTransport/src/tglf_nn.jl.
+# trained on NEO databases spanning d3d, mastu and nstx equilibria.
 #
 # Inference contract (matches the training pipeline exactly):
 # - inputs are RAW linear values in NEO bulk-ion-normalized units; the forward
@@ -114,7 +113,7 @@ end
     loadmodel(filename::AbstractString)
 
 Load a NEO-NN model or ensemble by name (resolved via [`resolve_model_path`](@ref),
-so bare names like `"neonn_tgyro_d3d+mastu+nstx_flux_v1"` find the shipped models)
+so bare names like `"neonn_d3d+mastu+nstx_flux"` find the shipped models)
 or by absolute path.
 """
 function loadmodel(filename::AbstractString)
@@ -391,7 +390,7 @@ const _FLOW_YNAMES = ["OUT_jpar", "OUT_vpol_elec", "OUT_vpol_ion1", "OUT_vpol_io
 function _validate_group(ensemble::NEONNfluxmodel, expected::Vector{String}, group::String, model_filename::String)
     Set(ensemble.ynames) == Set(expected) || error(
         "NEO-NN: model '$model_filename' has outputs $(ensemble.ynames), " *
-        "not a $group model. Flux models end in _flux_v1, flow models in _flow_v1.")
+        "not a $group model. Flux models end in _flux, flow models in _flow.")
     return nothing
 end
 
@@ -407,7 +406,7 @@ end
 
 """
     run_neonn(input_neos::Vector{<:InputNEO};
-              model_filename="neonn_tgyro_d3d+mastu+nstx_flux_v1",
+              model_filename="neonn_d3d+mastu+nstx_flux",
               uncertain=false, warn_nn_train_bounds=true)
 
 Evaluate the NEO-NN flux surrogate at each radial point and return a
@@ -415,7 +414,7 @@ Evaluate the NEO-NN flux surrogate at each radial point and return a
 [`run_neo`](@ref) (same tgyro-block normalization, no NEO executable needed).
 
 The default model is the joint `d3d+mastu+nstx` net (recommended); the
-single-device nets (`neonn_tgyro_d3d_flux_v1`, `neonn_tgyro_mastu+nstx_flux_v1`)
+single-device nets (`neonn_d3d_flux`, `neonn_mastu+nstx_flux`)
 are selectable by name — see [`available_models`](@ref).
 
 `PARTICLE_FLUX_i` has length 2: `[bulk ion, lumped impurity]` (the NN species
@@ -428,7 +427,7 @@ Note: signed outputs follow the training devices' helicity convention
 (IPCCW/BTCCW are not NN inputs).
 """
 function run_neonn(input_neos::Vector{<:InputNEO};
-    model_filename::String="neonn_tgyro_d3d+mastu+nstx_flux_v1",
+    model_filename::String="neonn_d3d+mastu+nstx_flux",
     uncertain::Bool=false,
     warn_nn_train_bounds::Bool=true)
 
@@ -477,7 +476,7 @@ end
 
 """
     run_neonn_flow(input_neos::Vector{<:InputNEO};
-                   model_filename="neonn_tgyro_d3d+mastu+nstx_flow_v1",
+                   model_filename="neonn_d3d+mastu+nstx_flow",
                    uncertain=false, warn_nn_train_bounds=true)
 
 Evaluate the NEO-NN flow surrogate (poloidal velocities + parallel current)
@@ -485,7 +484,7 @@ at each radial point; returns a `Vector{NEOFlowSolution}`. Same conventions
 and options as [`run_neonn`](@ref).
 """
 function run_neonn_flow(input_neos::Vector{<:InputNEO};
-    model_filename::String="neonn_tgyro_d3d+mastu+nstx_flow_v1",
+    model_filename::String="neonn_d3d+mastu+nstx_flow",
     uncertain::Bool=false,
     warn_nn_train_bounds::Bool=true)
 

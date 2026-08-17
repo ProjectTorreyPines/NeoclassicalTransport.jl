@@ -148,7 +148,7 @@ end
 # The NN layer is generic in eltype (Float64 weights x Dual inputs), so
 # gradients of the surrogate fluxes w.r.t. any feature come for free.
 @testset "NEO-NN AD" begin
-    ens = NeoclassicalTransport.loadmodelonce("neonn_tgyro_d3d+mastu+nstx_flux_v1")
+    ens = NeoclassicalTransport.loadmodelonce("neonn_d3d+mastu+nstx_flux")
     ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, ir)
     nn = NeoclassicalTransport.InputNEONN(ineo)
     xnames_val = NeoclassicalTransport._get_xnames_without_log10_suffix(ens)
