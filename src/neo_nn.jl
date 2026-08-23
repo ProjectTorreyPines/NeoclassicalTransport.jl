@@ -404,6 +404,62 @@ function _build_X(ensemble::NEONNfluxmodel, input_neos::Vector{<:InputNEO})
     return X
 end
 
+#= =============== =#
+#  Radial blending
+#= =============== =#
+# The DIII-D models come in radial families trained on region-specific DBs
+# (core rho 0.10-0.90, near-edge 0.68-0.94, edge 0.80-0.99 — the same radial
+# windows as the TGLF-NN DIII-D DBs). For the family bases below,
+# `run_neonn`/`run_neonn_flow` evaluate the named (core) model everywhere and
+# then overwrite each radial point in the near-edge / edge region with the
+# corresponding region net's prediction — the same hard-switch blending, at
+# the same boundaries (0.881 / 0.975 in r/a, here `RMIN_OVER_A`; TGLF-NN's
+# `RMIN_LOC` is the same coordinate), as TurbulentTransport.jl uses for the
+# `sat3_em_d3d_azf-1_withnegD` TGLF-NN model family.
+const _RADIAL_BLEND_NEAREDGE_RMIN = 0.881
+const _RADIAL_BLEND_EDGE_RMIN = 0.975
+const _RADIAL_BLEND_VARIANTS = Dict(
+    # base (model_filename minus _flux/_flow) => (near-edge base, edge base)
+    "neonn_d3d" => ("neonn_d3dnearedge", "neonn_d3dedge"),
+    "neonn_d3d+d3dnegd" => ("neonn_d3dnearedge+d3dnegdnearedge", "neonn_d3dedge+d3dnegdedge"),
+)
+
+# Overwrite the columns of Y whose RMIN_OVER_A falls in the near-edge / edge
+# region with the region net's prediction. No-op for models outside
+# `_RADIAL_BLEND_VARIANTS`. Mutates and returns Y.
+function _radial_blend!(Y::AbstractMatrix, X::AbstractMatrix, ensemble::NEONNfluxmodel,
+    model_filename::String, expected_ynames::Vector{String}, group::String;
+    uncertain::Bool, warn_nn_train_bounds::Bool)
+
+    m = match(r"^(.*)_(flux|flow)$", model_filename)
+    m === nothing && return Y
+    variants = get(_RADIAL_BLEND_VARIANTS, m.captures[1], nothing)
+    variants === nothing && return Y
+
+    k_rmin = findfirst(isequal("RMIN_OVER_A"), ensemble.xnames)
+    if k_rmin === nothing
+        @warn "RMIN_OVER_A not found in xnames for radial-dependent model blending"
+        return Y
+    end
+
+    rmin = view(X, k_rmin, :)
+    nearedge_mask = (rmin .>= _RADIAL_BLEND_NEAREDGE_RMIN) .& (rmin .< _RADIAL_BLEND_EDGE_RMIN)
+    edge_mask = rmin .>= _RADIAL_BLEND_EDGE_RMIN
+    for (mask, base) in ((nearedge_mask, variants[1]), (edge_mask, variants[2]))
+        any(mask) || continue
+        variant = "$(base)_$(m.captures[2])"
+        vens = loadmodelonce(variant)
+        _validate_group(vens, expected_ynames, group, variant)
+        # X columns and Y rows are reused across the family: schemas must match.
+        vens.xnames == ensemble.xnames || error(
+            "NEO-NN radial blending: '$variant' xnames differ from '$model_filename'")
+        vens.ynames == ensemble.ynames || error(
+            "NEO-NN radial blending: '$variant' ynames differ from '$model_filename'")
+        Y[:, mask] .= flux_array(vens, X[:, mask]; uncertain, warn_nn_train_bounds)
+    end
+    return Y
+end
+
 """
     run_neonn(input_neos::Vector{<:InputNEO};
               model_filename="neonn_d3d+mastu+nstx_flux",
@@ -416,6 +472,13 @@ Evaluate the NEO-NN flux surrogate at each radial point and return a
 The default model is the joint `d3d+mastu+nstx` net (recommended); the
 single-device nets (`neonn_d3d_flux`, `neonn_mastu+nstx_flux`)
 are selectable by name — see [`available_models`](@ref).
+
+DIII-D radial families blend automatically: with `model_filename` set to
+`neonn_d3d_flux` (or the joint negative-triangularity family
+`neonn_d3d+d3dnegd_flux`), radial points with `RMIN_OVER_A >= 0.881` use the
+family's near-edge net and points with `RMIN_OVER_A >= 0.975` its edge net —
+the same region switching TurbulentTransport.jl applies for the
+`sat3_em_d3d_azf-1_withnegD` TGLF-NN model.
 
 `PARTICLE_FLUX_i` has length 2: `[bulk ion, lumped impurity]` (the NN species
 reduction), unlike `run_neo` which returns one entry per plasma ion.
@@ -436,6 +499,7 @@ function run_neonn(input_neos::Vector{<:InputNEO};
 
     X = _build_X(ensemble, input_neos)
     Y = flux_array(ensemble, X; uncertain, warn_nn_train_bounds)
+    _radial_blend!(Y, X, ensemble, model_filename, _FLUX_YNAMES, "flux"; uncertain, warn_nn_train_bounds)
 
     iy = Dict(name => k for (k, name) in enumerate(ensemble.ynames))
     T = eltype(Y)
@@ -481,7 +545,8 @@ end
 
 Evaluate the NEO-NN flow surrogate (poloidal velocities + parallel current)
 at each radial point; returns a `Vector{NEOFlowSolution}`. Same conventions
-and options as [`run_neonn`](@ref).
+and options as [`run_neonn`](@ref), including the automatic DIII-D radial
+family blending (`neonn_d3d_flow` / `neonn_d3d+d3dnegd_flow`).
 """
 function run_neonn_flow(input_neos::Vector{<:InputNEO};
     model_filename::String="neonn_d3d+mastu+nstx_flow",
@@ -493,6 +558,7 @@ function run_neonn_flow(input_neos::Vector{<:InputNEO};
 
     X = _build_X(ensemble, input_neos)
     Y = flux_array(ensemble, X; uncertain, warn_nn_train_bounds)
+    _radial_blend!(Y, X, ensemble, model_filename, _FLOW_YNAMES, "flow"; uncertain, warn_nn_train_bounds)
 
     iy = Dict(name => k for (k, name) in enumerate(ensemble.ynames))
     T = eltype(Y)

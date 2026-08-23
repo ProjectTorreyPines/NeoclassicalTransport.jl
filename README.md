@@ -35,6 +35,12 @@ drop-in comparable. Flow quantities are in NEO bulk-ion normalized units
 bulk-ion values). Model selection is by `model_filename`; see
 `NeoclassicalTransport.available_models()`.
 
+Radial blending: the DIII-D families (`neonn_d3d_*` and, when shipped, the joint
+negative-triangularity `neonn_d3d+d3dnegd_*`) blend radially — points with
+`RMIN_OVER_A >= 0.881` are evaluated with the family's near-edge net and points
+with `RMIN_OVER_A >= 0.975` with its edge net, mirroring TurbulentTransport.jl's
+region switching for the `sat3_em_d3d_azf-1_withnegD` TGLF-NN model.
+
 Caveats:
 - The nets use a 3-species reduction: bulk hydrogenic ion, one lumped impurity, electrons.
   Extra hydrogenic ions (e.g. T in DT) are folded into the bulk via quasineutrality —
