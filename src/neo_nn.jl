@@ -418,10 +418,20 @@ end
 # `sat3_em_d3d_azf-1_withnegD` TGLF-NN model family.
 const _RADIAL_BLEND_NEAREDGE_RMIN = 0.881
 const _RADIAL_BLEND_EDGE_RMIN = 0.975
+# base (model_filename minus _flux/_flow) =>
+#   (near-edge base, edge base, near-edge switch r/a, edge switch r/a)
 const _RADIAL_BLEND_VARIANTS = Dict(
-    # base (model_filename minus _flux/_flow) => (near-edge base, edge base)
-    "neonn_d3d" => ("neonn_d3dnearedge", "neonn_d3dedge"),
-    "neonn_d3d+d3dnegd" => ("neonn_d3dnearedge+d3dnegdnearedge", "neonn_d3dedge+d3dnegdedge"),
+    "neonn_d3d" => ("neonn_d3dnearedge", "neonn_d3dedge",
+        _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
+    "neonn_d3d+d3dnegd" => ("neonn_d3dnearedge+d3dnegdnearedge", "neonn_d3dedge+d3dnegdedge",
+        _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
+    # spherical-tokamak family (MAST-U + NSTX, positive + negative triangularity);
+    # the ST DBs span the same radial windows as the DIII-D ones (core 0.10-0.90,
+    # near-edge 0.68-0.94, edge 0.80-0.99), so the switch points are shared.
+    "neonn_mastu+mastunegd+nstx+nstxnegd" => (
+        "neonn_mastunearedge+mastunegdnearedge+nstxnearedge+nstxnegdnearedge",
+        "neonn_mastuedge+mastunegdedge+nstxedge+nstxnegdedge",
+        _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
 )
 
 # Overwrite the columns of Y whose RMIN_OVER_A falls in the near-edge / edge
@@ -442,10 +452,11 @@ function _radial_blend!(Y::AbstractMatrix, X::AbstractMatrix, ensemble::NEONNflu
         return Y
     end
 
+    nearedge_base, edge_base, r_nearedge, r_edge = variants
     rmin = view(X, k_rmin, :)
-    nearedge_mask = (rmin .>= _RADIAL_BLEND_NEAREDGE_RMIN) .& (rmin .< _RADIAL_BLEND_EDGE_RMIN)
-    edge_mask = rmin .>= _RADIAL_BLEND_EDGE_RMIN
-    for (mask, base) in ((nearedge_mask, variants[1]), (edge_mask, variants[2]))
+    nearedge_mask = (rmin .>= r_nearedge) .& (rmin .< r_edge)
+    edge_mask = rmin .>= r_edge
+    for (mask, base) in ((nearedge_mask, nearedge_base), (edge_mask, edge_base))
         any(mask) || continue
         variant = "$(base)_$(m.captures[2])"
         vens = loadmodelonce(variant)
@@ -473,12 +484,14 @@ The default model is the joint `d3d+mastu+nstx` net (recommended); the
 single-device nets (`neonn_d3d_flux`, `neonn_mastu+nstx_flux`)
 are selectable by name — see [`available_models`](@ref).
 
-DIII-D radial families blend automatically: with `model_filename` set to
-`neonn_d3d_flux` (or the joint negative-triangularity family
-`neonn_d3d+d3dnegd_flux`), radial points with `RMIN_OVER_A >= 0.881` use the
-family's near-edge net and points with `RMIN_OVER_A >= 0.975` its edge net —
-the same region switching TurbulentTransport.jl applies for the
-`sat3_em_d3d_azf-1_withnegD` TGLF-NN model.
+Radial families blend automatically: with `model_filename` set to a family's
+core net (`neonn_d3d_flux`, the joint negative-triangularity
+`neonn_d3d+d3dnegd_flux`, or the spherical-tokamak
+`neonn_mastu+mastunegd+nstx+nstxnegd_flux`), radial points with
+`RMIN_OVER_A >= 0.881` use the family's near-edge net and points with
+`RMIN_OVER_A >= 0.975` its edge net — the same region switching
+TurbulentTransport.jl applies for the `sat3_em_d3d_azf-1_withnegD` TGLF-NN
+model (see `_RADIAL_BLEND_VARIANTS`).
 
 `PARTICLE_FLUX_i` has length 2: `[bulk ion, lumped impurity]` (the NN species
 reduction), unlike `run_neo` which returns one entry per plasma ion.
