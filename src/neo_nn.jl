@@ -423,14 +423,15 @@ const _RADIAL_BLEND_EDGE_RMIN = 0.975
 const _RADIAL_BLEND_VARIANTS = Dict(
     "neonn_d3d" => ("neonn_d3dnearedge", "neonn_d3dedge",
         _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
-    "neonn_d3d+d3dnegd" => ("neonn_d3dnearedge+d3dnegdnearedge", "neonn_d3dedge+d3dnegdedge",
+    # *_withnegD: trained on the positive + negative triangularity DBs jointly
+    # (TGLF-NN naming convention)
+    "neonn_d3d_withnegD" => ("neonn_d3dnearedge_withnegD", "neonn_d3dedge_withnegD",
         _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
-    # spherical-tokamak family (MAST-U + NSTX, positive + negative triangularity);
-    # the ST DBs span the same radial windows as the DIII-D ones (core 0.10-0.90,
-    # near-edge 0.68-0.94, edge 0.80-0.99), so the switch points are shared.
-    "neonn_mastu+mastunegd+nstx+nstxnegd" => (
-        "neonn_mastunearedge+mastunegdnearedge+nstxnearedge+nstxnegdnearedge",
-        "neonn_mastuedge+mastunegdedge+nstxedge+nstxnegdedge",
+    # spherical-tokamak family (MAST-U + NSTX); the ST DBs span the same radial
+    # windows as the DIII-D ones (core 0.10-0.90, near-edge 0.68-0.94, edge
+    # 0.80-0.99), so the switch points are shared.
+    "neonn_mastu+nstx_withnegD" => (
+        "neonn_mastunearedge+nstxnearedge_withnegD", "neonn_mastuedge+nstxedge_withnegD",
         _RADIAL_BLEND_NEAREDGE_RMIN, _RADIAL_BLEND_EDGE_RMIN),
 )
 
@@ -485,9 +486,9 @@ single-device nets (`neonn_d3d_flux`, `neonn_mastu+nstx_flux`)
 are selectable by name — see [`available_models`](@ref).
 
 Radial families blend automatically: with `model_filename` set to a family's
-core net (`neonn_d3d_flux`, the joint negative-triangularity
-`neonn_d3d+d3dnegd_flux`, or the spherical-tokamak
-`neonn_mastu+mastunegd+nstx+nstxnegd_flux`), radial points with
+core net (`neonn_d3d_flux`, the joint ± triangularity
+`neonn_d3d_withnegD_flux`, or the spherical-tokamak
+`neonn_mastu+nstx_withnegD_flux`), radial points with
 `RMIN_OVER_A >= 0.881` use the family's near-edge net and points with
 `RMIN_OVER_A >= 0.975` its edge net — the same region switching
 TurbulentTransport.jl applies for the `sat3_em_d3d_azf-1_withnegD` TGLF-NN
@@ -559,7 +560,7 @@ end
 Evaluate the NEO-NN flow surrogate (poloidal velocities + parallel current)
 at each radial point; returns a `Vector{NEOFlowSolution}`. Same conventions
 and options as [`run_neonn`](@ref), including the automatic DIII-D radial
-family blending (`neonn_d3d_flow` / `neonn_d3d+d3dnegd_flow`).
+family blending (`neonn_d3d_flow`, `neonn_d3d_withnegD_flow`, `neonn_mastu+nstx_withnegD_flow`).
 """
 function run_neonn_flow(input_neos::Vector{<:InputNEO};
     model_filename::String="neonn_d3d+mastu+nstx_flow",

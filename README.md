@@ -20,8 +20,8 @@ databases, shipped in `models/` via Git LFS:
 | `neonn_d3dedge_{flux,flow}` | DIII-D, edge radii (rho 0.80-0.99) | same |
 | `neonn_d3dnearedge_{flux,flow}` | DIII-D, near-edge radii (rho 0.68-0.94) | same |
 | `neonn_d3dnegdedge_{flux,flow}` | DIII-D, negative triangularity, edge radii (rho 0.80-0.99) | same |
-| `neonn_mastunearedge+mastunegdnearedge+nstxnearedge+nstxnegdnearedge_{flux,flow}` | MAST-U + NSTX, ± triangularity, near-edge radii | same |
-| `neonn_mastuedge+mastunegdedge+nstxedge+nstxnegdedge_{flux,flow}` | MAST-U + NSTX, ± triangularity, edge radii | same |
+| `neonn_mastunearedge+nstxnearedge_withnegD_{flux,flow}` | MAST-U + NSTX, ± triangularity, near-edge radii (rho 0.68-0.94) | same |
+| `neonn_mastuedge+nstxedge_withnegD_{flux,flow}` | MAST-U + NSTX, ± triangularity, edge radii (rho 0.80-0.99) | same |
 
 ```julia
 using NeoclassicalTransport
@@ -38,8 +38,9 @@ bulk-ion values). Model selection is by `model_filename`; see
 `NeoclassicalTransport.available_models()`.
 
 Radial blending: selecting a family's core net (`neonn_d3d_*`, the joint
-negative-triangularity `neonn_d3d+d3dnegd_*`, or the spherical-tokamak
-`neonn_mastu+mastunegd+nstx+nstxnegd_*`) blends radially — points with
+± triangularity `neonn_d3d_withnegD_*`, or the spherical-tokamak
+`neonn_mastu+nstx_withnegD_*`; `_withnegD` = trained on the positive and
+negative triangularity DBs jointly) blends radially — points with
 `RMIN_OVER_A >= 0.881` are evaluated with the family's near-edge net and points
 with `RMIN_OVER_A >= 0.975` with its edge net, mirroring TurbulentTransport.jl's
 region switching for the `sat3_em_d3d_azf-1_withnegD` TGLF-NN model.
