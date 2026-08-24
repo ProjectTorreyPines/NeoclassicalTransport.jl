@@ -37,8 +37,10 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
 
     @testset "neo_nn.jl" begin
-        # --- model loading: all 12 shipped ensembles
-        shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "d3dnegdedge", "mastu+nstx", "d3d+mastu+nstx")
+        # --- model loading: all 16 shipped ensembles
+        shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "d3dnegdedge", "mastu+nstx", "d3d+mastu+nstx",
+                                          "mastunearedge+mastunegdnearedge+nstxnearedge+nstxnegdnearedge",
+                                          "mastuedge+mastunegdedge+nstxedge+nstxnegdedge")
                               for grp in ("flux", "flow")]
         for (dev, grp) in shipped
             name = "neonn_$(dev)_$(grp)"
