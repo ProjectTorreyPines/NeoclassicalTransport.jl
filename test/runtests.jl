@@ -37,9 +37,9 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
 
     @testset "neo_nn.jl" begin
-        # --- model loading: all 16 shipped ensembles
+        # --- model loading: all 18 shipped ensembles
         shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "d3dnegdedge", "mastu+nstx", "d3d+mastu+nstx",
-                                          "mastunearedge+nstxnearedge_withnegD", "mastuedge+nstxedge_withnegD")
+                                          "mastu+nstx_withnegD", "mastunearedge+nstxnearedge_withnegD", "mastuedge+nstxedge_withnegD")
                               for grp in ("flux", "flow")]
         for (dev, grp) in shipped
             name = "neonn_$(dev)_$(grp)"
@@ -124,26 +124,31 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test_throws ErrorException NeoclassicalTransport.run_neonn(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flow")
         @test_throws ErrorException NeoclassicalTransport.run_neonn_flow(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flux")
 
-        # --- DIII-D radial-family blending: neonn_d3d_* switches to the
-        # near-edge / edge nets at RMIN_OVER_A >= 0.881 / 0.975 (the
+        # --- radial-family blending: a family's core net switches to its
+        # near-edge / edge nets at the family's switch r/a (0.881 / 0.975, the
         # TurbulentTransport withnegD boundaries). A blended point must match
         # the region net evaluated directly; a core point must be unaffected.
         cand = [NeoclassicalTransport.InputNEO(eqt, cp1d, gp) for gp in findall(rho .>= 0.80)]
-        i_ne = findfirst(ineo -> 0.881 <= ineo.RMIN_OVER_A < 0.975, cand)
-        i_ed = findfirst(ineo -> ineo.RMIN_OVER_A >= 0.975, cand)
-        @test i_ne !== nothing  # test ODS must reach into the near-edge region
-        for (idx, variant) in ((i_ne, "neonn_d3dnearedge"), (i_ed, "neonn_d3dedge"))
-            idx === nothing && continue
-            ineo = cand[idx]
-            b_flux = NeoclassicalTransport.run_neonn([input_neos[2], ineo]; model_filename="neonn_d3d_flux", warn_nn_train_bounds=false)
-            d_flux = NeoclassicalTransport.run_neonn(ineo; model_filename="$(variant)_flux", warn_nn_train_bounds=false)
-            @test isapprox(b_flux[2].ENERGY_FLUX_e, d_flux.ENERGY_FLUX_e; rtol=1e-12)
-            @test isapprox(b_flux[2].ENERGY_FLUX_i, d_flux.ENERGY_FLUX_i; rtol=1e-12)
-            @test isapprox(b_flux[1].ENERGY_FLUX_i, sols_d3d[2].ENERGY_FLUX_i; rtol=1e-12)  # core point untouched
-            b_flow = NeoclassicalTransport.run_neonn_flow([ineo]; model_filename="neonn_d3d_flow", warn_nn_train_bounds=false)
-            d_flow = NeoclassicalTransport.run_neonn_flow(ineo; model_filename="$(variant)_flow", warn_nn_train_bounds=false)
-            @test isapprox(only(b_flow).jpar, d_flow.jpar; rtol=1e-12)
-            @test isapprox(only(b_flow).vpol_ion1, d_flow.vpol_ion1; rtol=1e-12)
+        for (core, variants) in NeoclassicalTransport._RADIAL_BLEND_VARIANTS
+            core in ("neonn_d3d_withnegD",) && continue  # not shipped yet
+            nearedge, edge, r_ne, r_ed = variants
+            i_ne = findfirst(ineo -> r_ne <= ineo.RMIN_OVER_A < r_ed, cand)
+            i_ed = findfirst(ineo -> ineo.RMIN_OVER_A >= r_ed, cand)
+            @test i_ne !== nothing  # test ODS must reach into the near-edge region
+            c_flux = NeoclassicalTransport.run_neonn(input_neos[2]; model_filename="$(core)_flux", warn_nn_train_bounds=false)
+            for (idx, variant) in ((i_ne, nearedge), (i_ed, edge))
+                idx === nothing && continue
+                ineo = cand[idx]
+                b_flux = NeoclassicalTransport.run_neonn([input_neos[2], ineo]; model_filename="$(core)_flux", warn_nn_train_bounds=false)
+                d_flux = NeoclassicalTransport.run_neonn(ineo; model_filename="$(variant)_flux", warn_nn_train_bounds=false)
+                @test isapprox(b_flux[2].ENERGY_FLUX_e, d_flux.ENERGY_FLUX_e; rtol=1e-12)
+                @test isapprox(b_flux[2].ENERGY_FLUX_i, d_flux.ENERGY_FLUX_i; rtol=1e-12)
+                @test isapprox(b_flux[1].ENERGY_FLUX_i, c_flux.ENERGY_FLUX_i; rtol=1e-12)  # core point untouched
+                b_flow = NeoclassicalTransport.run_neonn_flow([ineo]; model_filename="$(core)_flow", warn_nn_train_bounds=false)
+                d_flow = NeoclassicalTransport.run_neonn_flow(ineo; model_filename="$(variant)_flow", warn_nn_train_bounds=false)
+                @test isapprox(only(b_flow).jpar, d_flow.jpar; rtol=1e-12)
+                @test isapprox(only(b_flow).vpol_ion1, d_flow.vpol_ion1; rtol=1e-12)
+            end
         end
     end
 end

@@ -20,6 +20,7 @@ databases, shipped in `models/` via Git LFS:
 | `neonn_d3dedge_{flux,flow}` | DIII-D, edge radii (rho 0.80-0.99) | same |
 | `neonn_d3dnearedge_{flux,flow}` | DIII-D, near-edge radii (rho 0.68-0.94) | same |
 | `neonn_d3dnegdedge_{flux,flow}` | DIII-D, negative triangularity, edge radii (rho 0.80-0.99) | same |
+| `neonn_mastu+nstx_withnegD_{flux,flow}` | MAST-U + NSTX, ± triangularity, core radii (rho 0.10-0.90); blends radially with the two nets below | same |
 | `neonn_mastunearedge+nstxnearedge_withnegD_{flux,flow}` | MAST-U + NSTX, ± triangularity, near-edge radii (rho 0.68-0.94) | same |
 | `neonn_mastuedge+nstxedge_withnegD_{flux,flow}` | MAST-U + NSTX, ± triangularity, edge radii (rho 0.80-0.99) | same |
 
