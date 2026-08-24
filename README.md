@@ -19,7 +19,7 @@ databases, shipped in `models/` via Git LFS:
 | `neonn_mastu+nstx_{flux,flow}` | MAST-U + NSTX | same |
 | `neonn_d3dedge_{flux,flow}` | DIII-D, edge radii (rho 0.80-0.99) | same |
 | `neonn_d3dnearedge_{flux,flow}` | DIII-D, near-edge radii (rho 0.68-0.94) | same |
-| `neonn_d3dnegdedge_flow` | DIII-D, negative triangularity, edge radii (rho 0.80-0.99); flux model pending | vpol × 3 species + jpar |
+| `neonn_d3dnegdedge_{flux,flow}` | DIII-D, negative triangularity, edge radii (rho 0.80-0.99) | same |
 
 ```julia
 using NeoclassicalTransport

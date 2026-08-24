@@ -37,11 +37,9 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
 
     @testset "neo_nn.jl" begin
-        # --- model loading: all 11 shipped ensembles
-        # (d3dnegdedge ships flow only until its flux ensemble finishes training)
-        shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "mastu+nstx", "d3d+mastu+nstx")
+        # --- model loading: all 12 shipped ensembles
+        shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "d3dnegdedge", "mastu+nstx", "d3d+mastu+nstx")
                               for grp in ("flux", "flow")]
-        push!(shipped, ("d3dnegdedge", "flow"))
         for (dev, grp) in shipped
             name = "neonn_$(dev)_$(grp)"
             @test name in NeoclassicalTransport.available_models()
