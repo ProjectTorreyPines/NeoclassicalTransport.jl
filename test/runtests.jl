@@ -37,9 +37,10 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
 
     @testset "neo_nn.jl" begin
-        # --- model loading: all 18 shipped ensembles
+        # --- model loading: all 22 shipped ensembles
         shipped = [(dev, grp) for dev in ("d3d", "d3dedge", "d3dnearedge", "d3dnegdedge", "mastu+nstx", "d3d+mastu+nstx",
-                                          "mastu+nstx_withnegD", "mastunearedge+nstxnearedge_withnegD", "mastuedge+nstxedge_withnegD")
+                                          "mastu+nstx_withnegD", "mastunearedge+nstxnearedge_withnegD", "mastuedge+nstxedge_withnegD",
+                                          "d3d_withnegD", "d3dedge_withnegD")
                               for grp in ("flux", "flow")]
         for (dev, grp) in shipped
             name = "neonn_$(dev)_$(grp)"
@@ -130,7 +131,7 @@ cp1d = dd.core_profiles.profiles_1d[];
         # the region net evaluated directly; a core point must be unaffected.
         cand = [NeoclassicalTransport.InputNEO(eqt, cp1d, gp) for gp in findall(rho .>= 0.80)]
         for (core, variants) in NeoclassicalTransport._RADIAL_BLEND_VARIANTS
-            core in ("neonn_d3d_withnegD",) && continue  # not shipped yet
+            core in ("neonn_d3d_withnegD",) && continue  # near-edge member of this family not shipped yet
             nearedge, edge, r_ne, r_ed = variants
             i_ne = findfirst(ineo -> r_ne <= ineo.RMIN_OVER_A < r_ed, cand)
             i_ed = findfirst(ineo -> ineo.RMIN_OVER_A >= r_ed, cand)

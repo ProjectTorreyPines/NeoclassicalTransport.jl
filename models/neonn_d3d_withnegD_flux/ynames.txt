@@ -1,0 +1,9 @@
+OUT_eflux_tgyro_elec
+OUT_eflux_tgyro_ion1
+OUT_eflux_tgyro_ion2
+OUT_mflux_tgyro_elec
+OUT_mflux_tgyro_ion1
+OUT_mflux_tgyro_ion2
+OUT_pflux_tgyro_elec
+OUT_pflux_tgyro_ion1
+OUT_pflux_tgyro_ion2
