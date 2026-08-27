@@ -589,3 +589,172 @@ end
 function run_neonn_flow(input_neo::InputNEO; kw...)
     return only(run_neonn_flow([input_neo]; kw...))
 end
+
+#= ================================= =#
+#  Radial electric field (force balance)
+#= ================================= =#
+
+"""
+    NeoclassicalErSolution
+
+Outboard-midplane radial electric field from neoclassical radial force balance,
+built on the NEO-NN poloidal flow. All fields SI:
+
+- `Er`: E_R at the outboard midplane [V/m], the sum of the three terms below
+- `Er_pressure`: `(dp_s/dR)/(Z_s e n_s)` [V/m] (diamagnetic term)
+- `Er_vtor`: `-v_φ,s B_Z` [V/m] (toroidal-rotation term)
+- `Er_vpol`: `+v_θ,s B_φ` [V/m] (poloidal-flow term, the NEO-NN contribution)
+- `vpol`: species poloidal velocity at θ=0 [m/s] (`+Z` at the outboard midplane)
+- `B_tor`, `B_pol`: signed `B_φ = F/R` and `B_Z = sign(Ip)|B_p|` at θ=0 [T]
+- `grad_r`: `|∇r|` at θ=0, converting `d/dr` (minor radius) to `d/dR`
+- `R_omp`: major radius of the θ=0 point [m]
+
+`Er / grad_r` is the same field expressed against the minor-radius coordinate.
+"""
+struct NeoclassicalErSolution{T<:Real}
+    Er::T
+    Er_pressure::T
+    Er_vtor::T
+    Er_vpol::T
+    vpol::T
+    B_tor::T
+    B_pol::T
+    grad_r::T
+    R_omp::T
+end
+
+"""
+    neoclassical_Er(eqt, cp1d, gridpoints, v_tor;
+                    species=:impurity, model_filename="neonn_d3d+mastu+nstx_flow",
+                    uncertain=false, warn_nn_train_bounds=true)
+
+Close radial force balance for one species with the NEO-NN poloidal flow and
+return `Vector{NeoclassicalErSolution}`, one per entry of `gridpoints`
+(indices into `cp1d.grid.rho_tor_norm`).
+
+Working in cylindrical `(R, φ, Z)` at the outboard midplane, where `R̂` is the
+radial and `Ẑ` the poloidal direction, the `R` component of
+`Z_s e n_s (E + v_s × B) = ∇p_s` gives
+
+    E_R = (dp_s/dR)/(Z_s e n_s) - v_φ,s B_Z + v_θ,s B_φ
+
+`v_tor` is the **toroidal velocity of that species** in m/s, signed along the
+IMAS toroidal angle (a scalar, or one value per gridpoint). It is a required
+input because it is not neoclassical: it is set by momentum transport and
+torque, and in the standard diagnostic application it comes from CER on the
+same impurity whose `v_θ` the network supplies.
+
+`species` selects the force-balance species and the matching network output,
+in the nets' 3-species reduction:
+`:bulk` (hydrogenic, `vpol_ion1`), `:impurity` (lumped, `vpol_ion2`) or
+`:electron` (`vpol_elec`). Densities, temperatures, charge and gradients are
+taken from the same [`InputNEONN`](@ref) the network is evaluated on, so the
+lumping is identical to the one behind the flow prediction.
+
+Requires the 2D equilibrium: `B_p` at θ=0 is evaluated from the ψ map, since
+the 1D `r B_unit / q` shortcut misses `|∇r|` at θ=0 (1.5-2.4x on a shaped
+equilibrium).
+
+CAVEATS
+- The nets carry the training devices' helicity convention (IPCCW/BTCCW are not
+  inputs, `q` is forced negative), so the sign of `vpol` — and hence of
+  `Er_vpol` — follows that convention. Validate against a known case before
+  trusting the sign on a discharge of opposite helicity; the terms are returned
+  separately so `Er_vpol` can be negated.
+- The training NEO runs did not include an equilibrium-scale radial electric
+  field, so `vpol` is the unsqueezed neoclassical flow: orbit squeezing inside
+  a deep E_r well is not represented.
+- `OMEGA_ROT`/`OMEGA_ROT_DERIV` ARE network inputs (taken from
+  `cp1d.rotation_frequency_tor_sonic`), so if you derive them from an assumed
+  E_r you should iterate this closure to a fixed point.
+
+# Example
+```julia
+gps = [argmin(abs.(cp1d.grid.rho_tor_norm .- r)) for r in (0.90, 0.95, 0.99)]
+v_tor = [8.0e4, 6.0e4, 3.0e4]  # m/s, measured impurity toroidal rotation
+sols = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps, v_tor; species=:impurity)
+```
+"""
+function neoclassical_Er(
+    eqt::IMAS.equilibrium__time_slice,
+    cp1d::IMAS.core_profiles__profiles_1d,
+    gridpoints::AbstractVector{<:Integer},
+    v_tor;
+    species::Symbol=:impurity,
+    model_filename::String="neonn_d3d+mastu+nstx_flow",
+    uncertain::Bool=false,
+    warn_nn_train_bounds::Bool=true)
+
+    species in (:bulk, :impurity, :electron) ||
+        error("neoclassical_Er: species must be :bulk, :impurity or :electron, got :$species")
+    isempty(eqt.profiles_2d) &&
+        error("neoclassical_Er: needs the 2D equilibrium (eqt.profiles_2d) to evaluate B_p at θ=0")
+
+    v_tors = v_tor isa Real ? fill(float(v_tor), length(gridpoints)) : collect(float.(v_tor))
+    length(v_tors) == length(gridpoints) ||
+        error("neoclassical_Er: v_tor has $(length(v_tors)) entries but there are $(length(gridpoints)) gridpoints")
+
+    input_neos = [InputNEO(eqt, cp1d, gp) for gp in gridpoints]
+    nns = [InputNEONN(ineo) for ineo in input_neos]
+    flows = run_neonn_flow(input_neos; model_filename, uncertain, warn_nn_train_bounds)
+
+    eqt1d = eqt.profiles_1d
+    rho = cp1d.grid.rho_tor_norm
+    rmin = GACODE.r_min_core_profiles(eqt1d, rho) ./ IMAS.cgs.m_to_cm    # cm -> m
+    a = rmin[end]
+    R_omp = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.r_outboard).(rho)     # m
+    Fpol = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.f).(rho)               # T*m, signed
+    qprof = IMAS.interp1d(eqt1d.rho_tor_norm, eqt1d.q).(rho)
+    bunit = IMAS.interp1d(eqt1d.rho_tor_norm, GACODE.bunit(eqt1d)).(rho)  # T
+    _, _, PSI_interpolant = IMAS.ψ_interpolant(eqt.profiles_2d)
+    Zaxis = eqt.global_quantities.magnetic_axis.z
+    sIp = sign(eqt.global_quantities.ip)
+
+    # bulk-ion normalizing speed: sqrt(k*T_1/m_D), the training convention that
+    # InputNEONN's electron->ion rescale (1/sqrt(τ), deuterium mass) implies
+    k = IMAS.cgs.k          # erg/eV
+    md = IMAS.cgs.md        # g
+    Te = cp1d.electrons.temperature   # eV
+    ne = cp1d.electrons.density       # m^-3
+
+    return map(enumerate(gridpoints)) do (i, gp)
+        nn = nns[i]
+        T1 = Te[gp] / nn.TEMP_3                       # eV, bulk hydrogenic ion
+        v_norm = sqrt(k * T1 / md) / IMAS.cgs.m_to_cm # cm/s -> m/s
+        n_b = ne[gp] / nn.DENS_3                      # m^-3, folded bulk ion
+        n_imp = nn.DENS_2 * n_b                       # m^-3, lumped impurity
+        Z_imp = (ne[gp] - n_b) / n_imp                # quasineutrality, Z_bulk = 1
+
+        if species === :bulk
+            vpol_n, Zs, Ts, aLn, aLT = flows[i].vpol_ion1, one(Z_imp), T1, nn.DLNNDR_1, nn.DLNTDR_1
+        elseif species === :impurity
+            vpol_n, Zs, Ts, aLn, aLT = flows[i].vpol_ion2, Z_imp, nn.TEMP_2 * T1, nn.DLNNDR_2, nn.DLNTDR_2
+        else
+            vpol_n, Zs, Ts, aLn, aLT = flows[i].vpol_elec, -one(Z_imp), Te[gp], nn.DLNNDR_3, nn.DLNTDR_3
+        end
+
+        Bp_mag = IMAS.Bp(PSI_interpolant, R_omp[gp], Zaxis)   # |B_p| at θ=0 [T]
+        B_pol = sIp * Bp_mag                                  # +Z at θ=0 for Ip along +φ
+        B_tor = Fpol[gp] / R_omp[gp]
+        # |∇r| at θ=0 = (∂ψ/∂R)/(dψ/dr) with dψ/dr = r*B_unit/|q| (GACODE)
+        grad_r = rmin[gp] > 0 ? R_omp[gp] * Bp_mag * abs(qprof[gp]) / (rmin[gp] * bunit[gp]) : one(Bp_mag)
+
+        # DLNNDR = -a dln n/dr, DLNTDR = -a dln T/dr; T in eV makes this V/m
+        Er_pressure = -(Ts / Zs) * (aLn + aLT) / a * grad_r
+        vpol = vpol_n * v_norm
+        Er_vtor = -v_tors[i] * B_pol
+        Er_vpol = vpol * B_tor
+
+        # promote so `uncertain=true` (Measurements in the flow terms only) still
+        # gives a concretely-typed solution
+        NeoclassicalErSolution(promote(
+            Er_pressure + Er_vtor + Er_vpol,
+            Er_pressure, Er_vtor, Er_vpol,
+            vpol, B_tor, B_pol, grad_r, R_omp[gp])...)
+    end
+end
+
+function neoclassical_Er(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d,
+    gridpoint::Integer, v_tor::Real; kw...)
+    return only(neoclassical_Er(eqt, cp1d, [gridpoint], v_tor; kw...))
+end

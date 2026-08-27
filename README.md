@@ -41,6 +41,35 @@ drop-in comparable. Flow quantities are in NEO bulk-ion normalized units
 bulk-ion values). Model selection is by `model_filename`; see
 `NeoclassicalTransport.available_models()`.
 
+### Radial electric field from the flow nets
+
+`neoclassical_Er` closes radial force balance for one species with the network's
+poloidal flow, returning the outboard-midplane `E_R` [V/m] and its three terms:
+
+```julia
+gps = [argmin(abs.(cp1d.grid.rho_tor_norm .- r)) for r in (0.90, 0.95, 0.99)]
+v_tor = [8.0e4, 6.0e4, 3.0e4]   # m/s, measured toroidal rotation of that species
+sols = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps, v_tor; species=:impurity)
+sols[1].Er, sols[1].Er_pressure, sols[1].Er_vtor, sols[1].Er_vpol
+```
+
+    E_R = (dp_s/dR)/(Z_s e n_s) - v_φ,s B_Z + v_θ,s B_φ    (at θ = 0)
+
+`v_tor` is required: the toroidal velocity is set by momentum transport and
+torque, not by neoclassical theory — in the standard diagnostic application it
+is the CER rotation of the same impurity whose `v_θ` the network supplies. The
+densities, temperatures, charge and gradients come from the same `InputNEONN`
+the network is evaluated on, so the 3-species lumping matches the flow
+prediction exactly; `B_p` at θ = 0 is taken from the 2D ψ map (required), since
+the 1D `r B_unit/q` shortcut misses `|∇r|` at θ = 0 by 1.5-2.4x on a shaped
+equilibrium. `species` is `:bulk`, `:impurity` (default) or `:electron` — with a
+*consistent* `v_tor` per species they must give the same `E_R`, so disagreement
+between two species is a diagnostic on the supplied rotation. Caveats: the
+signed `v_θ` inherits the training helicity convention (see below), the training
+NEO runs carried no equilibrium-scale radial electric field so `v_θ` is the
+unsqueezed neoclassical flow, and `OMEGA_ROT`/`OMEGA_ROT_DERIV` *are* network
+inputs — deriving them from an assumed `E_r` means iterating to a fixed point.
+
 Radial blending: selecting a family's core net (`neonn_d3d_*`, the joint
 ± triangularity `neonn_d3d_withnegD_*`, or the spherical-tokamak
 `neonn_mastu+nstx_withnegD_*`; `_withnegD` = trained on the positive and

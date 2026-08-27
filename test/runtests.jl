@@ -125,6 +125,55 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test_throws ErrorException NeoclassicalTransport.run_neonn(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flow")
         @test_throws ErrorException NeoclassicalTransport.run_neonn_flow(input_neos[1]; model_filename="neonn_d3d+mastu+nstx_flux")
 
+        # --- neoclassical Er closure (force balance on the NEO-NN poloidal flow)
+        gps_er = [argmin(abs.(rho .- r)) for r in (0.5, 0.9, 0.95)]
+        input_neos_er = [NeoclassicalTransport.InputNEO(eqt, cp1d, gp) for gp in gps_er]
+        Rout = NeoclassicalTransport.IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.r_outboard).(rho)
+        vtor = fill(5.0e4, length(gps_er))  # m/s, stand-in for a measured toroidal rotation
+        ers = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er, vtor; species=:impurity, warn_nn_train_bounds=false)
+        @test length(ers) == length(gps_er)
+        for (gp, s) in zip(gps_er, ers)
+            # the three terms are the whole story
+            @test isapprox(s.Er, s.Er_pressure + s.Er_vtor + s.Er_vpol; rtol=1e-12)
+            @test all(isfinite, (s.Er, s.Er_pressure, s.Er_vtor, s.Er_vpol, s.vpol, s.grad_r))
+            # geometry at theta=0: |grad r| > 1 on this shaped equilibrium, B_tor ~ F/R
+            @test s.grad_r > 1.0
+            @test isapprox(s.B_tor, NeoclassicalTransport.IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, eqt.profiles_1d.f).(rho)[gp] / s.R_omp; rtol=1e-10)
+            @test isapprox(s.R_omp, Rout[gp]; rtol=1e-10)
+            @test abs(s.B_pol) < abs(s.B_tor)
+            # decreasing profiles + positive charge -> diamagnetic term digs the well
+            @test s.Er_pressure < 0
+            # the toroidal term is exactly -v_tor*B_pol
+            @test isapprox(s.Er_vtor, -5.0e4 * s.B_pol; rtol=1e-12)
+        end
+
+        # Er is linear in the supplied toroidal velocity, slope -B_pol
+        ers2 = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er, 2 .* vtor; species=:impurity, warn_nn_train_bounds=false)
+        for (s1, s2) in zip(ers, ers2)
+            @test isapprox(s2.Er - s1.Er, -5.0e4 * s1.B_pol; rtol=1e-10)
+        end
+
+        # scalar method, and the species -> network-output mapping shares one v_norm
+        s_one = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er[2], 5.0e4; species=:impurity, warn_nn_train_bounds=false)
+        @test isapprox(s_one.Er, ers[2].Er; rtol=1e-12)
+        s_bulk = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er[2], 5.0e4; species=:bulk, warn_nn_train_bounds=false)
+        s_elec = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er[2], 5.0e4; species=:electron, warn_nn_train_bounds=false)
+        flow2 = NeoclassicalTransport.run_neonn_flow(input_neos_er[2]; warn_nn_train_bounds=false)
+        @test isapprox(s_one.vpol / flow2.vpol_ion2, s_bulk.vpol / flow2.vpol_ion1; rtol=1e-10)
+        @test isapprox(s_bulk.vpol / flow2.vpol_ion1, s_elec.vpol / flow2.vpol_elec; rtol=1e-10)
+        # electrons: Z < 0 flips the diamagnetic term
+        @test s_elec.Er_pressure > 0
+
+        # ensemble uncertainty propagates through the closure
+        s_unc = NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er[2], 5.0e4; uncertain=true, warn_nn_train_bounds=false)
+        @test s_unc.Er isa NeoclassicalTransport.Measurements.Measurement
+        @test NeoclassicalTransport.Measurements.uncertainty(s_unc.Er) > 0
+        @test isapprox(NeoclassicalTransport.Measurements.value(s_unc.Er), ers[2].Er; rtol=1e-5)
+
+        # input validation
+        @test_throws ErrorException NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er, vtor; species=:carbon)
+        @test_throws ErrorException NeoclassicalTransport.neoclassical_Er(eqt, cp1d, gps_er, vtor[1:2])
+
         # --- radial-family blending: a family's core net switches to its
         # near-edge / edge nets at the family's switch r/a (0.881 / 0.975, the
         # TurbulentTransport withnegD boundaries). A blended point must match
