@@ -2,6 +2,7 @@ module NeoclassicalTransport
 
 using IMAS
 import GACODE
+import ForwardDiff
 
 include("input_neo.jl")
 

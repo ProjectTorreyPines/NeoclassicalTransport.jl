@@ -87,6 +87,31 @@ Caveats:
   entry per plasma ion.
 - Signed outputs (momentum flux, vpol, jpar) follow the training devices' helicity
   convention (IPCCW/BTCCW are not net inputs).
+- **Differentiable end to end.** `InputNEO{T}` carries the element type, so a
+  `ForwardDiff.Dual` set on a plasma quantity propagates through the species
+  lumping, the electron → bulk-ion normalization, the log10 feature transform and
+  the ensemble forward pass — `run_neonn` and `run_neonn_flow`, radial-family
+  blending included. `InputNEO(eqt, cp1d, gp)` inherits the element type of the
+  dd, so a dd carrying Duals (FUSE's AD path) needs nothing extra; otherwise
+  start from `InputNEO{D}(input_neo)`:
+
+  ```julia
+  ineo0 = NeoclassicalTransport.InputNEO(eqt, cp1d, gridpoint)
+  function Qi(x::AbstractVector{D}) where {D<:Real}
+      ineo = NeoclassicalTransport.InputNEO{D}(ineo0)
+      ineo.DLNTDR_1, ineo.TEMP_1 = x[1], x[2]
+      return NeoclassicalTransport.run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+  end
+  ForwardDiff.gradient(Qi, [ineo0.DLNTDR_1, ineo0.TEMP_1])
+  ```
+
+  `neoclassical_Er` differentiates w.r.t. the profiles (Dual `cp1d`) at frozen
+  geometry — `eqt` must stay Float64, because IMAS's 2D ψ interpolant is not
+  Dual-capable. Derivatives that are structurally zero are real: `DLNNDR_1` is
+  one, because the bulk-ion density gradient feature is rebuilt from the electron
+  and impurity gradients by quasineutrality rather than read. Two entry points are
+  not differentiable and say so: `run_neo` (shells out to NEO) and
+  `uncertain=true` (the ensemble spread).
 - Validation against NEO on a machine with GACODE installed:
   compare `run_neonn(input_neo)` vs `run_neo(input_neo)` at a few radii.
   (Cross-checked on actual training inputs: ≤1.5% per channel at mid-radius

@@ -147,6 +147,11 @@ end
 # ---- NEO-NN: ForwardDiff through the ensemble forward pass ----
 # The NN layer is generic in eltype (Float64 weights x Dual inputs), so
 # gradients of the surrogate fluxes w.r.t. any feature come for free.
+#
+# Differentiating from a *plasma quantity* rather than a raw feature (i.e.
+# through InputNEO -> InputNEONN -> the nets) is covered by the "neo_nn.jl AD"
+# testset in runtests.jl; what follows is the heavier full-Jacobian check that
+# does not belong in CI.
 @testset "NEO-NN AD" begin
     ens = NeoclassicalTransport.loadmodelonce("neonn_d3d+mastu+nstx_flux")
     ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, ir)
@@ -169,4 +174,41 @@ end
     fd = (nn_Qi(xp) - nn_Qi(xm)) / (2hx)
     @test isapprox(grad_ad[k], fd; rtol=1e-4)
     println("dQi/dDLNTDR_1 (AD): $(grad_ad[k])  (FD): $fd")
+end
+
+# ---- NEO-NN: full Jacobian of every output channel w.r.t. every feature ----
+@testset "NEO-NN Jacobian" begin
+    ens = NeoclassicalTransport.loadmodelonce("neonn_d3d+mastu+nstx_flux")
+    ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, ir)
+    nn = NeoclassicalTransport.InputNEONN(ineo)
+    xnames_val = NeoclassicalTransport._get_xnames_without_log10_suffix(ens)
+    x0 = NeoclassicalTransport._extract_fields!(zeros(length(ens.xnames)), nn, xnames_val)
+
+    f(x) = NeoclassicalTransport.flux_array(ens, x; warn_nn_train_bounds=false)
+    J = ForwardDiff.jacobian(f, x0)
+    @test size(J) == (length(ens.ynames), length(ens.xnames))
+    @test all(isfinite, J)
+
+    # every feature must move at least one channel: a column of exact zeros
+    # would mean the net ignores an input it was trained on
+    dead = [ens.xnames[k] for k in axes(J, 2) if all(iszero, J[:, k])]
+    @test isempty(dead)
+
+    # central-difference the whole Jacobian. The step has to scale with the
+    # feature: several inputs are O(1e-3) (NU_1, RHO_STAR) and are fed to the
+    # net through log10, so an absolute step of 1e-5 is a ~1% excursion and the
+    # truncation error alone reaches 0.5%.
+    Jfd = similar(J)
+    for k in eachindex(x0)
+        h = 1e-6 * max(abs(x0[k]), 1e-4)
+        xp = copy(x0); xp[k] += h
+        xm = copy(x0); xm[k] -= h
+        Jfd[:, k] = (f(xp) - f(xm)) / (2h)
+    end
+    @test isapprox(J, Jfd; rtol=1e-4, atol=1e-6 * maximum(abs, J))
+
+    worst = argmax(abs.(J .- Jfd) ./ max.(abs.(Jfd), 1e-12))
+    println("largest AD-FD Jacobian deviation at ",
+            ens.ynames[worst[1]], " / ", ens.xnames[worst[2]],
+            ": AD=", J[worst], " FD=", Jfd[worst])
 end

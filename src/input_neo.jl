@@ -1,227 +1,288 @@
-Base.@kwdef mutable struct InputNEO
-    BETA_STAR::Union{Float64,Missing} = missing
-    DELTA::Union{Float64,Missing} = missing
-    DLNNDRE_ADE::Union{Float64,Missing} = missing
-    DLNTDRE_ADE::Union{Float64,Missing} = missing
-    DPHI0DR::Union{Float64,Missing} = missing
-    EPAR0::Union{Float64,Missing} = missing
-    EPAR0_SPITZER::Union{Float64,Missing} = missing
-    KAPPA::Union{Float64,Missing} = missing
-    NE_ADE::Union{Float64,Missing} = missing
-    NU_1::Union{Float64,Missing} = missing
-    OMEGA_ROT::Union{Float64,Missing} = missing
-    OMEGA_ROT_DERIV::Union{Float64,Missing} = missing
-    Q::Union{Float64,Missing} = missing
-    RHO_STAR::Union{Float64,Missing} = missing
-    RMAJ_OVER_A::Union{Float64,Missing} = missing
-    RMIN_OVER_A::Union{Float64,Missing} = missing
-    S_DELTA::Union{Float64,Missing} = missing
-    S_KAPPA::Union{Float64,Missing} = missing
-    S_ZETA::Union{Float64,Missing} = missing
-    S_ZMAG::Union{Float64,Missing} = missing
-    SHEAR::Union{Float64,Missing} = missing
-    SHIFT::Union{Float64,Missing} = missing
-    TE_ADE::Union{Float64,Missing} = missing
-    THREED_EXB_DPHI0DR::Union{Float64,Missing} = missing
-    ZETA::Union{Float64,Missing} = missing
-    ZMAG_OVER_A::Union{Float64,Missing} = missing
+mutable struct InputNEO{T<:Real}
+    BETA_STAR::Union{T,Missing}
+    DELTA::Union{T,Missing}
+    DLNNDRE_ADE::Union{T,Missing}
+    DLNTDRE_ADE::Union{T,Missing}
+    DPHI0DR::Union{T,Missing}
+    EPAR0::Union{T,Missing}
+    EPAR0_SPITZER::Union{T,Missing}
+    KAPPA::Union{T,Missing}
+    NE_ADE::Union{T,Missing}
+    NU_1::Union{T,Missing}
+    OMEGA_ROT::Union{T,Missing}
+    OMEGA_ROT_DERIV::Union{T,Missing}
+    Q::Union{T,Missing}
+    RHO_STAR::Union{T,Missing}
+    RMAJ_OVER_A::Union{T,Missing}
+    RMIN_OVER_A::Union{T,Missing}
+    S_DELTA::Union{T,Missing}
+    S_KAPPA::Union{T,Missing}
+    S_ZETA::Union{T,Missing}
+    S_ZMAG::Union{T,Missing}
+    SHEAR::Union{T,Missing}
+    SHIFT::Union{T,Missing}
+    TE_ADE::Union{T,Missing}
+    THREED_EXB_DPHI0DR::Union{T,Missing}
+    ZETA::Union{T,Missing}
+    ZMAG_OVER_A::Union{T,Missing}
 
 
     #moment parameters 
-    SHAPE_COS0::Union{Float64,Missing} = missing
-    SHAPE_S_COS0::Union{Float64,Missing} = missing
-    SHAPE_COS1::Union{Float64,Missing} = missing
-    SHAPE_S_COS1::Union{Float64,Missing} = missing
-    SHAPE_COS2::Union{Float64,Missing} = missing
-    SHAPE_S_COS2::Union{Float64,Missing} = missing
-    SHAPE_COS3::Union{Float64,Missing} = missing
-    SHAPE_S_COS3::Union{Float64,Missing} = missing
-    SHAPE_SIN3::Union{Float64,Missing} = missing
-    SHAPE_S_SIN3::Union{Float64,Missing} = missing
+    SHAPE_COS0::Union{T,Missing}
+    SHAPE_S_COS0::Union{T,Missing}
+    SHAPE_COS1::Union{T,Missing}
+    SHAPE_S_COS1::Union{T,Missing}
+    SHAPE_COS2::Union{T,Missing}
+    SHAPE_S_COS2::Union{T,Missing}
+    SHAPE_COS3::Union{T,Missing}
+    SHAPE_S_COS3::Union{T,Missing}
+    SHAPE_SIN3::Union{T,Missing}
+    SHAPE_S_SIN3::Union{T,Missing}
 
 
     #species-specific parameters 
-    ANISO_MODEL_1::Union{Int,Missing} = missing
-    DENS_1::Union{Float64,Missing} = missing
-    DLNNDR_1::Union{Float64,Missing} = missing
-    DLNTDR_1::Union{Float64,Missing} = missing
-    DLNTDR_PARA_1::Union{Float64,Missing} = missing
-    DLNTDR_PERP_1::Union{Float64,Missing} = missing
-    MASS_1::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_1_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_1_SCALE::Union{Float64,Missing} = missing
-    TEMP_1::Union{Float64,Missing} = missing
-    TEMP_PARA_1::Union{Float64,Missing} = missing
-    TEMP_PERP_1::Union{Float64,Missing} = missing
-    Z_1::Union{Int64,Missing} = missing
+    ANISO_MODEL_1::Union{Int,Missing}
+    DENS_1::Union{T,Missing}
+    DLNNDR_1::Union{T,Missing}
+    DLNTDR_1::Union{T,Missing}
+    DLNTDR_PARA_1::Union{T,Missing}
+    DLNTDR_PERP_1::Union{T,Missing}
+    MASS_1::Union{T,Missing}
+    PROFILE_DLNNDR_1_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_1_SCALE::Union{T,Missing}
+    TEMP_1::Union{T,Missing}
+    TEMP_PARA_1::Union{T,Missing}
+    TEMP_PERP_1::Union{T,Missing}
+    Z_1::Union{Int64,Missing}
 
-    ANISO_MODEL_2::Union{Int,Missing} = missing
-    DENS_2::Union{Float64,Missing} = missing
-    DLNNDR_2::Union{Float64,Missing} = missing
-    DLNTDR_2::Union{Float64,Missing} = missing
-    DLNTDR_PARA_2::Union{Float64,Missing} = missing
-    DLNTDR_PERP_2::Union{Float64,Missing} = missing
-    MASS_2::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_2_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_2_SCALE::Union{Float64,Missing} = missing
-    TEMP_2::Union{Float64,Missing} = missing
-    TEMP_PARA_2::Union{Float64,Missing} = missing
-    TEMP_PERP_2::Union{Float64,Missing} = missing
-    Z_2::Union{Int64,Missing} = missing
+    ANISO_MODEL_2::Union{Int,Missing}
+    DENS_2::Union{T,Missing}
+    DLNNDR_2::Union{T,Missing}
+    DLNTDR_2::Union{T,Missing}
+    DLNTDR_PARA_2::Union{T,Missing}
+    DLNTDR_PERP_2::Union{T,Missing}
+    MASS_2::Union{T,Missing}
+    PROFILE_DLNNDR_2_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_2_SCALE::Union{T,Missing}
+    TEMP_2::Union{T,Missing}
+    TEMP_PARA_2::Union{T,Missing}
+    TEMP_PERP_2::Union{T,Missing}
+    Z_2::Union{Int64,Missing}
 
-    ANISO_MODEL_3::Union{Int,Missing} = missing
-    DENS_3::Union{Float64,Missing} = missing
-    DLNNDR_3::Union{Float64,Missing} = missing
-    DLNTDR_3::Union{Float64,Missing} = missing
-    DLNTDR_PARA_3::Union{Float64,Missing} = missing
-    DLNTDR_PERP_3::Union{Float64,Missing} = missing
-    MASS_3::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_3_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_3_SCALE::Union{Float64,Missing} = missing
-    TEMP_3::Union{Float64,Missing} = missing
-    TEMP_PARA_3::Union{Float64,Missing} = missing
-    TEMP_PERP_3::Union{Float64,Missing} = missing
-    Z_3::Union{Int64,Missing} = missing
+    ANISO_MODEL_3::Union{Int,Missing}
+    DENS_3::Union{T,Missing}
+    DLNNDR_3::Union{T,Missing}
+    DLNTDR_3::Union{T,Missing}
+    DLNTDR_PARA_3::Union{T,Missing}
+    DLNTDR_PERP_3::Union{T,Missing}
+    MASS_3::Union{T,Missing}
+    PROFILE_DLNNDR_3_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_3_SCALE::Union{T,Missing}
+    TEMP_3::Union{T,Missing}
+    TEMP_PARA_3::Union{T,Missing}
+    TEMP_PERP_3::Union{T,Missing}
+    Z_3::Union{Int64,Missing}
 
-    ANISO_MODEL_4::Union{Int,Missing} = missing
-    DENS_4::Union{Float64,Missing} = missing
-    DLNNDR_4::Union{Float64,Missing} = missing
-    DLNTDR_4::Union{Float64,Missing} = missing
-    DLNTDR_PARA_4::Union{Float64,Missing} = missing
-    DLNTDR_PERP_4::Union{Float64,Missing} = missing
-    MASS_4::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_4_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_4_SCALE::Union{Float64,Missing} = missing
-    TEMP_4::Union{Float64,Missing} = missing
-    TEMP_PARA_4::Union{Float64,Missing} = missing
-    TEMP_PERP_4::Union{Float64,Missing} = missing
-    Z_4::Union{Int64,Missing} = missing
+    ANISO_MODEL_4::Union{Int,Missing}
+    DENS_4::Union{T,Missing}
+    DLNNDR_4::Union{T,Missing}
+    DLNTDR_4::Union{T,Missing}
+    DLNTDR_PARA_4::Union{T,Missing}
+    DLNTDR_PERP_4::Union{T,Missing}
+    MASS_4::Union{T,Missing}
+    PROFILE_DLNNDR_4_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_4_SCALE::Union{T,Missing}
+    TEMP_4::Union{T,Missing}
+    TEMP_PARA_4::Union{T,Missing}
+    TEMP_PERP_4::Union{T,Missing}
+    Z_4::Union{Int64,Missing}
 
-    ANISO_MODEL_5::Union{Int,Missing} = missing
-    DENS_5::Union{Float64,Missing} = missing
-    DLNNDR_5::Union{Float64,Missing} = missing
-    DLNTDR_5::Union{Float64,Missing} = missing
-    DLNTDR_PARA_5::Union{Float64,Missing} = missing
-    DLNTDR_PERP_5::Union{Float64,Missing} = missing
-    MASS_5::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_5_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_5_SCALE::Union{Float64,Missing} = missing
-    TEMP_5::Union{Float64,Missing} = missing
-    TEMP_PARA_5::Union{Float64,Missing} = missing
-    TEMP_PERP_5::Union{Float64,Missing} = missing
-    Z_5::Union{Int64,Missing} = missing
+    ANISO_MODEL_5::Union{Int,Missing}
+    DENS_5::Union{T,Missing}
+    DLNNDR_5::Union{T,Missing}
+    DLNTDR_5::Union{T,Missing}
+    DLNTDR_PARA_5::Union{T,Missing}
+    DLNTDR_PERP_5::Union{T,Missing}
+    MASS_5::Union{T,Missing}
+    PROFILE_DLNNDR_5_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_5_SCALE::Union{T,Missing}
+    TEMP_5::Union{T,Missing}
+    TEMP_PARA_5::Union{T,Missing}
+    TEMP_PERP_5::Union{T,Missing}
+    Z_5::Union{Int64,Missing}
 
-    ANISO_MODEL_6::Union{Int,Missing} = missing
-    DENS_6::Union{Float64,Missing} = missing
-    DLNNDR_6::Union{Float64,Missing} = missing
-    DLNTDR_6::Union{Float64,Missing} = missing
-    DLNTDR_PARA_6::Union{Float64,Missing} = missing
-    DLNTDR_PERP_6::Union{Float64,Missing} = missing
-    MASS_6::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_6_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_6_SCALE::Union{Float64,Missing} = missing
-    TEMP_6::Union{Float64,Missing} = missing
-    TEMP_PARA_6::Union{Float64,Missing} = missing
-    TEMP_PERP_6::Union{Float64,Missing} = missing
-    Z_6::Union{Int64,Missing} = missing
+    ANISO_MODEL_6::Union{Int,Missing}
+    DENS_6::Union{T,Missing}
+    DLNNDR_6::Union{T,Missing}
+    DLNTDR_6::Union{T,Missing}
+    DLNTDR_PARA_6::Union{T,Missing}
+    DLNTDR_PERP_6::Union{T,Missing}
+    MASS_6::Union{T,Missing}
+    PROFILE_DLNNDR_6_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_6_SCALE::Union{T,Missing}
+    TEMP_6::Union{T,Missing}
+    TEMP_PARA_6::Union{T,Missing}
+    TEMP_PERP_6::Union{T,Missing}
+    Z_6::Union{Int64,Missing}
 
-    ANISO_MODEL_7::Union{Int,Missing} = missing
-    DENS_7::Union{Float64,Missing} = missing
-    DLNNDR_7::Union{Float64,Missing} = missing
-    DLNTDR_7::Union{Float64,Missing} = missing
-    DLNTDR_PARA_7::Union{Float64,Missing} = missing
-    DLNTDR_PERP_7::Union{Float64,Missing} = missing
-    MASS_7::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_7_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_7_SCALE::Union{Float64,Missing} = missing
-    TEMP_7::Union{Float64,Missing} = missing
-    TEMP_PARA_7::Union{Float64,Missing} = missing
-    TEMP_PERP_7::Union{Float64,Missing} = missing
-    Z_7::Union{Int64,Missing} = missing
+    ANISO_MODEL_7::Union{Int,Missing}
+    DENS_7::Union{T,Missing}
+    DLNNDR_7::Union{T,Missing}
+    DLNTDR_7::Union{T,Missing}
+    DLNTDR_PARA_7::Union{T,Missing}
+    DLNTDR_PERP_7::Union{T,Missing}
+    MASS_7::Union{T,Missing}
+    PROFILE_DLNNDR_7_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_7_SCALE::Union{T,Missing}
+    TEMP_7::Union{T,Missing}
+    TEMP_PARA_7::Union{T,Missing}
+    TEMP_PERP_7::Union{T,Missing}
+    Z_7::Union{Int64,Missing}
 
-    ANISO_MODEL_8::Union{Int,Missing} = missing
-    DENS_8::Union{Float64,Missing} = missing
-    DLNNDR_8::Union{Float64,Missing} = missing
-    DLNTDR_8::Union{Float64,Missing} = missing
-    DLNTDR_PARA_8::Union{Float64,Missing} = missing
-    DLNTDR_PERP_8::Union{Float64,Missing} = missing
-    MASS_8::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_8_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_8_SCALE::Union{Float64,Missing} = missing
-    TEMP_8::Union{Float64,Missing} = missing
-    TEMP_PARA_8::Union{Float64,Missing} = missing
-    TEMP_PERP_8::Union{Float64,Missing} = missing
-    Z_8::Union{Int64,Missing} = missing
+    ANISO_MODEL_8::Union{Int,Missing}
+    DENS_8::Union{T,Missing}
+    DLNNDR_8::Union{T,Missing}
+    DLNTDR_8::Union{T,Missing}
+    DLNTDR_PARA_8::Union{T,Missing}
+    DLNTDR_PERP_8::Union{T,Missing}
+    MASS_8::Union{T,Missing}
+    PROFILE_DLNNDR_8_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_8_SCALE::Union{T,Missing}
+    TEMP_8::Union{T,Missing}
+    TEMP_PARA_8::Union{T,Missing}
+    TEMP_PERP_8::Union{T,Missing}
+    Z_8::Union{Int64,Missing}
 
-    ANISO_MODEL_9::Union{Int,Missing} = missing
-    DENS_9::Union{Float64,Missing} = missing
-    DLNNDR_9::Union{Float64,Missing} = missing
-    DLNTDR_9::Union{Float64,Missing} = missing
-    DLNTDR_PARA_9::Union{Float64,Missing} = missing
-    DLNTDR_PERP_9::Union{Float64,Missing} = missing
-    MASS_9::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_9_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_9_SCALE::Union{Float64,Missing} = missing
-    TEMP_9::Union{Float64,Missing} = missing
-    TEMP_PARA_9::Union{Float64,Missing} = missing
-    TEMP_PERP_9::Union{Float64,Missing} = missing
-    Z_9::Union{Int64,Missing} = missing
+    ANISO_MODEL_9::Union{Int,Missing}
+    DENS_9::Union{T,Missing}
+    DLNNDR_9::Union{T,Missing}
+    DLNTDR_9::Union{T,Missing}
+    DLNTDR_PARA_9::Union{T,Missing}
+    DLNTDR_PERP_9::Union{T,Missing}
+    MASS_9::Union{T,Missing}
+    PROFILE_DLNNDR_9_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_9_SCALE::Union{T,Missing}
+    TEMP_9::Union{T,Missing}
+    TEMP_PARA_9::Union{T,Missing}
+    TEMP_PERP_9::Union{T,Missing}
+    Z_9::Union{Int64,Missing}
 
-    ANISO_MODEL_10::Union{Int,Missing} = missing
-    DENS_10::Union{Float64,Missing} = missing
-    DLNNDR_10::Union{Float64,Missing} = missing
-    DLNTDR_10::Union{Float64,Missing} = missing
-    DLNTDR_PARA_10::Union{Float64,Missing} = missing
-    DLNTDR_PERP_10::Union{Float64,Missing} = missing
-    MASS_10::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_10_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_10_SCALE::Union{Float64,Missing} = missing
-    TEMP_10::Union{Float64,Missing} = missing
-    TEMP_PARA_10::Union{Float64,Missing} = missing
-    TEMP_PERP_10::Union{Float64,Missing} = missing
-    Z_10::Union{Int64,Missing} = missing
+    ANISO_MODEL_10::Union{Int,Missing}
+    DENS_10::Union{T,Missing}
+    DLNNDR_10::Union{T,Missing}
+    DLNTDR_10::Union{T,Missing}
+    DLNTDR_PARA_10::Union{T,Missing}
+    DLNTDR_PERP_10::Union{T,Missing}
+    MASS_10::Union{T,Missing}
+    PROFILE_DLNNDR_10_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_10_SCALE::Union{T,Missing}
+    TEMP_10::Union{T,Missing}
+    TEMP_PARA_10::Union{T,Missing}
+    TEMP_PERP_10::Union{T,Missing}
+    Z_10::Union{Int64,Missing}
 
-    ANISO_MODEL_11::Union{Int,Missing} = missing
-    DENS_11::Union{Float64,Missing} = missing
-    DLNNDR_11::Union{Float64,Missing} = missing
-    DLNTDR_11::Union{Float64,Missing} = missing
-    DLNTDR_PARA_11::Union{Float64,Missing} = missing
-    DLNTDR_PERP_11::Union{Float64,Missing} = missing
-    MASS_11::Union{Float64,Missing} = missing
-    PROFILE_DLNNDR_11_SCALE::Union{Float64,Missing} = missing
-    PROFILE_DLNTDR_11_SCALE::Union{Float64,Missing} = missing
-    TEMP_11::Union{Float64,Missing} = missing
-    TEMP_PARA_11::Union{Float64,Missing} = missing
-    TEMP_PERP_11::Union{Float64,Missing} = missing
-    Z_11::Union{Int64,Missing} = missing
+    ANISO_MODEL_11::Union{Int,Missing}
+    DENS_11::Union{T,Missing}
+    DLNNDR_11::Union{T,Missing}
+    DLNTDR_11::Union{T,Missing}
+    DLNTDR_PARA_11::Union{T,Missing}
+    DLNTDR_PERP_11::Union{T,Missing}
+    MASS_11::Union{T,Missing}
+    PROFILE_DLNNDR_11_SCALE::Union{T,Missing}
+    PROFILE_DLNTDR_11_SCALE::Union{T,Missing}
+    TEMP_11::Union{T,Missing}
+    TEMP_PARA_11::Union{T,Missing}
+    TEMP_PERP_11::Union{T,Missing}
+    Z_11::Union{Int64,Missing}
 
     #switches 
-    BTCCW::Union{Int,Missing} = missing
-    COLLISION_MODEL::Union{Int,Missing} = missing
-    EQUILIBRIUM_MODEL::Union{Int,Missing} = missing
-    IPCCW::Union{Int,Missing} = missing
-    N_ENERGY::Union{Int,Missing} = missing
-    N_RADIAL::Union{Int,Missing} = missing
-    N_SPECIES::Union{Int,Missing} = missing
-    N_THETA::Union{Int,Missing} = missing
-    N_XI::Union{Int,Missing} = missing
-    PROFILE_EQUILIBRIUM_MODEL::Union{Int,Missing} = missing
-    PROFILE_ERAD0_MODEL::Union{Int,Missing} = missing
-    PROFILE_MODEL::Union{Int,Missing} = missing
-    ROTATION_MODEL::Union{Int,Missing} = missing
-    SILENT_FLAG::Union{Int,Missing} = missing
-    SIM_MODEL::Union{Int,Missing} = missing
-    SPITZER_MODEL::Union{Int,Missing} = missing
-    THREED_MODEL::Union{Int,Missing} = missing
-    THREED_EXB_MODEL::Union{Int,Missing} = missing
+    BTCCW::Union{Int,Missing}
+    COLLISION_MODEL::Union{Int,Missing}
+    EQUILIBRIUM_MODEL::Union{Int,Missing}
+    IPCCW::Union{Int,Missing}
+    N_ENERGY::Union{Int,Missing}
+    N_RADIAL::Union{Int,Missing}
+    N_SPECIES::Union{Int,Missing}
+    N_THETA::Union{Int,Missing}
+    N_XI::Union{Int,Missing}
+    PROFILE_EQUILIBRIUM_MODEL::Union{Int,Missing}
+    PROFILE_ERAD0_MODEL::Union{Int,Missing}
+    PROFILE_MODEL::Union{Int,Missing}
+    ROTATION_MODEL::Union{Int,Missing}
+    SILENT_FLAG::Union{Int,Missing}
+    SIM_MODEL::Union{Int,Missing}
+    SPITZER_MODEL::Union{Int,Missing}
+    THREED_MODEL::Union{Int,Missing}
+    THREED_EXB_MODEL::Union{Int,Missing}
 end
+
+# Keyword constructors, generated so that every field defaults to `missing`.
+# (`Base.@kwdef` cannot be used on this struct: for a parametric type it also
+# emits a parameter-free keyword method that routes through the positional
+# UnionAll constructor, which Julia cannot resolve here because no field has
+# bare type `T` — they are all `Union{T,Missing}` — and that method cannot be
+# replaced without a method-overwrite error during precompilation.)
+#
+# The type parameter exists so the plasma quantities can carry
+# `ForwardDiff.Dual`s: see [`InputNEO{T}(::InputNEO)`](@ref) and the AD-capable
+# `run_neonn` path. Integer fields (species charges, switches) stay `Int`
+# whatever `T` is — nothing is differentiated with respect to them.
+@eval function (::Type{InputNEO{T}})(; $(map(f -> Expr(:kw, f, :missing), fieldnames(InputNEO{Float64}))...)) where {T<:Real}
+    return InputNEO{T}($(fieldnames(InputNEO{Float64})...))
+end
+
+"""
+    InputNEO(; kwargs...)
+
+`InputNEO{Float64}` — the element type an unparameterized construction defaults to.
+"""
+InputNEO(; kwargs...) = InputNEO{Float64}(; kwargs...)
+
+Base.eltype(::Type{InputNEO{T}}) where {T<:Real} = T
+Base.eltype(input_neo::InputNEO) = eltype(typeof(input_neo))
+
+"""
+    InputNEO{T}(other::InputNEO)
+
+Copy `other` with every real-valued field converted to `T` (`missing` stays
+`missing`, integer fields stay `Int`). This is how a differentiable evaluation
+starts from an already-populated input:
+
+```julia
+ineo0 = InputNEO(eqt, cp1d, gridpoint)
+function Qi(x::AbstractVector{D}) where {D<:Real}
+    ineo = InputNEO{D}(ineo0)
+    ineo.DLNTDR_1 = x[1]
+    ineo.TEMP_1 = x[2]
+    return run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+end
+ForwardDiff.gradient(Qi, [ineo0.DLNTDR_1, ineo0.TEMP_1])
+```
+"""
+function InputNEO{T}(other::InputNEO) where {T<:Real}
+    input_neo = InputNEO{T}()
+    for field in fieldnames(InputNEO{T})
+        value = getfield(other, field)
+        ismissing(value) && continue
+        setfield!(input_neo, field, value isa Integer ? value : convert(T, value))
+    end
+    return input_neo
+end
+
+InputNEO{T}(other::InputNEO{T}) where {T<:Real} = deepcopy(other)
+
 """
     InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, gridpoint_cp)
 
-Populates InputNEO structure with quantities from eqt and cp1d using NEO normalizations
+Populates InputNEO structure with quantities from eqt and cp1d using NEO normalizations.
+
+The element type is inherited from `eqt`/`cp1d`, so a dd carrying `ForwardDiff.Dual`s
+produces an `InputNEO{<:Dual}` and the NEO-NN surrogates differentiate straight through.
 """
-function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__profiles_1d, gridpoint_cp)
-    input_neo = InputNEO()
+function InputNEO(eqt::IMAS.equilibrium__time_slice{Teq}, cp1d::IMAS.core_profiles__profiles_1d{Tcp}, gridpoint_cp) where {Teq<:Real,Tcp<:Real}
+    # element type follows the dd's: under FUSE's AD path both carry Duals, and
+    # every quantity below is built from them
+    input_neo = InputNEO{promote_type(Teq, Tcp)}()
 
     eqt1d = eqt.profiles_1d
     ions = cp1d.ion
@@ -313,11 +374,13 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
     sZ0 = IMAS.gradient(rmin, Z0)
     input_neo.S_ZMAG = sZ0[gridpoint_cp]
 
+    # setproperty! (not setfield!) so every RHS is converted to the field type:
+    # under AD the struct is InputNEO{Dual} and constants like me/md are Float64
     for iion in eachindex(ions)
         species = iion
-        setfield!(input_neo, Symbol("ANISO_MODEL_$species"), 1)
-        setfield!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a .* mp / md)
-        setfield!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
+        setproperty!(input_neo, Symbol("ANISO_MODEL_$species"), 1)
+        setproperty!(input_neo, Symbol("MASS_$species"), ions[iion].element[1].a .* mp / md)
+        setproperty!(input_neo, Symbol("Z_$species"), Int(ions[iion].element[1].z_n / ions[1].element[1].z_n))
 
         Ti = ions[iion].temperature ./ t_norm
         dlntidr = -IMAS.calc_z(rmin ./ a, Ti, :backward)
@@ -329,22 +392,22 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
         ni = ni[gridpoint_cp]
         dlnnidr = dlnnidr[gridpoint_cp]
 
-        setfield!(input_neo, Symbol("TEMP_$species"), Ti)
-        setfield!(input_neo, Symbol("DENS_$species"), ni)
-        setfield!(input_neo, Symbol("DLNNDR_$species"), dlnnidr)
-        setfield!(input_neo, Symbol("DLNTDR_$species"), dlntidr)
+        setproperty!(input_neo, Symbol("TEMP_$species"), Ti)
+        setproperty!(input_neo, Symbol("DENS_$species"), ni)
+        setproperty!(input_neo, Symbol("DLNNDR_$species"), dlnnidr)
+        setproperty!(input_neo, Symbol("DLNTDR_$species"), dlntidr)
     end
 
     for i in range(1, 11)
         density_val = getfield(input_neo, Symbol("DENS_$i"))
         if ismissing(density_val)
-            setfield!(input_neo, Symbol("DENS_$i"), ne / n_norm)
-            setfield!(input_neo, Symbol("TEMP_$i"), Te / t_norm)
-            setfield!(input_neo, Symbol("ANISO_MODEL_$i"), 1)
-            setfield!(input_neo, Symbol("MASS_$i"), me / md)
-            setfield!(input_neo, Symbol("Z_$i"), -1)
-            setfield!(input_neo, Symbol("DLNNDR_$i"), dlnnedr)
-            setfield!(input_neo, Symbol("DLNTDR_$i"), dlntedr)
+            setproperty!(input_neo, Symbol("DENS_$i"), ne / n_norm)
+            setproperty!(input_neo, Symbol("TEMP_$i"), Te / t_norm)
+            setproperty!(input_neo, Symbol("ANISO_MODEL_$i"), 1)
+            setproperty!(input_neo, Symbol("MASS_$i"), me / md)
+            setproperty!(input_neo, Symbol("Z_$i"), -1)
+            setproperty!(input_neo, Symbol("DLNNDR_$i"), dlnnedr)
+            setproperty!(input_neo, Symbol("DLNTDR_$i"), dlntedr)
             break
         end
     end
@@ -368,6 +431,9 @@ function InputNEO(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_profiles__p
 end
 
 function save_inputneo(input_neo::InputNEO, filename::String)
+    eltype(input_neo) <: ForwardDiff.Dual && error(
+        "save_inputneo/run_neo are not differentiable (NEO is an external code): " *
+        "evaluate them on the primal InputNEO{Float64}, not on an InputNEO{Dual}")
     open(filename, "w") do io
         for key in fieldnames(typeof(input_neo))
             if startswith(String(key), "_")

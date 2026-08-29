@@ -1,5 +1,6 @@
 using NeoclassicalTransport
 using NeoclassicalTransport.IMAS
+using ForwardDiff
 using Test
 
 dd = IMAS.json2imas(joinpath(@__DIR__, "highbetap_fpp_325_ods.json"))
@@ -199,5 +200,115 @@ cp1d = dd.core_profiles.profiles_1d[];
                 @test isapprox(only(b_flow).vpol_ion1, d_flow.vpol_ion1; rtol=1e-12)
             end
         end
+    end
+
+    @testset "neo_nn.jl AD" begin
+        # The surrogates are differentiable end-to-end: InputNEO carries the
+        # element type, so a Dual set on a plasma quantity propagates through the
+        # species lumping, the electron -> bulk-ion normalization, the log10
+        # feature transform and the ensemble forward pass.
+        rho = cp1d.grid.rho_tor_norm
+        gps = [argmin(abs.(rho .- r)) for r in (0.3, 0.5, 0.7)]
+        ineo0 = NeoclassicalTransport.InputNEO(eqt, cp1d, gps[2])
+        @test ineo0 isa NeoclassicalTransport.InputNEO{Float64}
+        @test eltype(ineo0) === Float64
+        @test NeoclassicalTransport.InputNEO{Float32}(ineo0) isa NeoclassicalTransport.InputNEO{Float32}
+        @test NeoclassicalTransport.InputNEO{Float32}(ineo0).DELTA ≈ ineo0.DELTA rtol = 1e-6
+        @test NeoclassicalTransport.InputNEO{Float32}(ineo0).N_SPECIES === ineo0.N_SPECIES  # ints stay ints
+
+        # d(flux)/d(plasma quantity), against a central difference
+        function Qi(x::AbstractVector{D}) where {D<:Real}
+            ineo = NeoclassicalTransport.InputNEO{D}(ineo0)
+            ineo.DLNTDR_1, ineo.DLNTDR_3, ineo.TEMP_1 = x[1], x[2], x[3]
+            return NeoclassicalTransport.run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+        end
+        x0 = [ineo0.DLNTDR_1, ineo0.DLNTDR_3, ineo0.TEMP_1]
+        grad = ForwardDiff.gradient(Qi, x0)
+        @test all(isfinite, grad)
+        @test any(!iszero, grad)
+        for k in eachindex(x0)
+            h = 1e-6 * max(abs(x0[k]), 1.0)
+            xp = copy(x0); xp[k] += h
+            xm = copy(x0); xm[k] -= h
+            @test isapprox(grad[k], (Qi(xp) - Qi(xm)) / (2h); rtol=1e-5)
+        end
+
+        # ... and through the flow nets
+        function jpar(x::AbstractVector{D}) where {D<:Real}
+            ineo = NeoclassicalTransport.InputNEO{D}(ineo0)
+            ineo.NU_1 = x[1]
+            return NeoclassicalTransport.run_neonn_flow(ineo; warn_nn_train_bounds=false).jpar
+        end
+        y0 = [ineo0.NU_1]
+        gj = only(ForwardDiff.gradient(jpar, y0))
+        h = 1e-6 * max(abs(y0[1]), 1.0)
+        @test isfinite(gj) && !iszero(gj)
+        @test isapprox(gj, (jpar([y0[1] + h]) - jpar([y0[1] - h])) / (2h); rtol=1e-4)
+
+        # structurally zero: the bulk-ion density gradient is never read — the
+        # feature is rebuilt from the electron and impurity gradients by
+        # quasineutrality (see InputNEONN)
+        dQi_dLn1 = ForwardDiff.derivative(x -> begin
+                ineo = NeoclassicalTransport.InputNEO{typeof(x)}(ineo0)
+                ineo.DLNNDR_1 = x
+                NeoclassicalTransport.run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+            end, ineo0.DLNNDR_1)
+        @test dQi_dLn1 == 0
+
+        # AD survives the radial-family blending path (masked region nets)
+        i_ne = findfirst(gp -> begin
+                ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, gp)
+                NeoclassicalTransport._RADIAL_BLEND_NEAREDGE_RMIN <= ineo.RMIN_OVER_A < NeoclassicalTransport._RADIAL_BLEND_EDGE_RMIN
+            end, findall(rho .>= 0.80))
+        if i_ne !== nothing
+            ineo_ne = NeoclassicalTransport.InputNEO(eqt, cp1d, findall(rho .>= 0.80)[i_ne])
+            g_ne = ForwardDiff.derivative(x -> begin
+                    ineo = NeoclassicalTransport.InputNEO{typeof(x)}(ineo_ne)
+                    ineo.DLNTDR_1 = x
+                    NeoclassicalTransport.run_neonn(ineo; model_filename="neonn_d3d_flux", warn_nn_train_bounds=false).ENERGY_FLUX_i
+                end, ineo_ne.DLNTDR_1)
+            @test isfinite(g_ne) && !iszero(g_ne)
+        end
+
+        # --- a dd carrying Duals (FUSE's AD path): InputNEO inherits the element
+        # type and the derivative of a flux w.r.t. a profile value must match a
+        # central difference over the Float64 dd (calc_z couples neighbouring
+        # grid points; the FD sees the same coupling)
+        D = ForwardDiff.Dual{Nothing,Float64,1}
+        dd_ad = IMAS.dd{D}()
+        IMAS.fill!(dd_ad, dd)
+        eqt_ad = dd_ad.equilibrium.time_slice[]
+        cp1d_ad = dd_ad.core_profiles.profiles_1d[]
+        gp = gps[2]
+        Ti = cp1d_ad.ion[1].temperature
+        cp1d_ad.ion[1].temperature = [D(ForwardDiff.value(t), ForwardDiff.Partials((i == gp ? 1.0 : 0.0,))) for (i, t) in enumerate(Ti)]
+        ineo_ad = NeoclassicalTransport.InputNEO(eqt_ad, cp1d_ad, gp)
+        @test ineo_ad isa NeoclassicalTransport.InputNEO{D}
+        @test ineo_ad.N_SPECIES === ineo0.N_SPECIES
+        @test ineo_ad.BTCCW === ineo0.BTCCW
+        Qi_ad = NeoclassicalTransport.run_neonn(ineo_ad; warn_nn_train_bounds=false).ENERGY_FLUX_i
+        @test Qi_ad isa D
+        @test ForwardDiff.value(Qi_ad) ≈ NeoclassicalTransport.run_neonn(ineo0; warn_nn_train_bounds=false).ENERGY_FLUX_i rtol = 1e-10
+        function Qi_of_Ti(δ)
+            dd_p = deepcopy(dd)
+            cp = dd_p.core_profiles.profiles_1d[]
+            cp.ion[1].temperature[gp] += δ
+            ineo = NeoclassicalTransport.InputNEO(dd_p.equilibrium.time_slice[], cp, gp)
+            return NeoclassicalTransport.run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+        end
+        h = 1e-4 * ForwardDiff.value(Ti[gp])
+        dQi_fd = (Qi_of_Ti(h) - Qi_of_Ti(-h)) / (2h)
+        @test isapprox(ForwardDiff.partials(Qi_ad, 1), dQi_fd; rtol=1e-4)
+        # Float64 equilibrium + Dual profiles (frozen geometry) is the setting
+        # neoclassical_Er supports
+        ineo_mixed = NeoclassicalTransport.InputNEO(eqt, cp1d_ad, gp)
+        @test ineo_mixed isa NeoclassicalTransport.InputNEO{D}
+        er_ad = NeoclassicalTransport.neoclassical_Er(eqt, cp1d_ad, gp, 5.0e4; warn_nn_train_bounds=false)
+        @test er_ad.Er isa D
+        @test isfinite(ForwardDiff.partials(er_ad.Er, 1)) && !iszero(ForwardDiff.partials(er_ad.Er, 1))
+
+        # the two non-differentiable entry points refuse Duals explicitly
+        @test_throws ErrorException NeoclassicalTransport.run_neonn(ineo_ad; uncertain=true, warn_nn_train_bounds=false)
+        @test_throws ErrorException NeoclassicalTransport.save_inputneo(ineo_ad, tempname())
     end
 end

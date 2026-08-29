@@ -175,6 +175,9 @@ Base.@kwdef struct InputNEONN{T<:Real}
     ZMAG_OVER_A::T
 end
 
+Base.eltype(::Type{InputNEONN{T}}) where {T<:Real} = T
+Base.eltype(nn::InputNEONN) = eltype(typeof(nn))
+
 function _req(input_neo::InputNEO, field::Symbol)
     value = getfield(input_neo, field)
     ismissing(value) && error("NEO-NN: InputNEO field $field is missing — construct InputNEO(eqt, cp1d, gridpoint) first")
@@ -196,11 +199,15 @@ Build the NEO-NN feature vector from an `InputNEO` (as produced by
    t_norm = Te) to the training DB's bulk-ion normalization
    (DENS_1 = TEMP_1 = 1, v_norm = sqrt(k*T_1/m_1)).
 
+The element type follows the `InputNEO`'s, so `ForwardDiff.Dual`s survive the
+lumping and the normalization conversion.
+
 The training databases are D + C plasmas; DT plasmas work through the
 hydrogenic fold but are outside the training distribution — enable
 `warn_nn_train_bounds` to monitor extrapolation.
 """
-function InputNEONN(input_neo::InputNEO)
+function InputNEONN(input_neo::InputNEO{S}) where {S<:Real}
+    T = float(S)
     n_species = _req(input_neo, :N_SPECIES)
 
     # species 1 must be the bulk hydrogenic ion (the training normalizer).
@@ -245,7 +252,7 @@ function InputNEONN(input_neo::InputNEO)
     τ = temp[1]
     sqrtτ = sqrt(τ)
 
-    return InputNEONN{Float64}(;
+    return InputNEONN{T}(;
         DELTA=_req(input_neo, :DELTA),
         DENS_2=n_imp / n_b,
         DENS_3=dens[ielec] / n_b,
@@ -356,6 +363,10 @@ function flux_array(ensemble::NEONNensemble, x::AbstractMatrix{T}; uncertain::Bo
     nmodels = length(ensemble.models)
     nouts = length(ensemble.ynames)
     nsamples = size(x, 2)
+    # Measurements.measurement(::Dual, ::Dual) recurses without bound
+    uncertain && T <: ForwardDiff.Dual && error(
+        "NEO-NN: uncertain=true is not differentiable — take the gradient of the " *
+        "ensemble mean, or evaluate the uncertainty on the primal (Float64) input")
 
     all_y = Array{float(T),3}(undef, nouts, nsamples, nmodels)
     for (k, model) in enumerate(ensemble.models)
@@ -396,7 +407,10 @@ end
 
 function _build_X(ensemble::NEONNfluxmodel, input_neos::Vector{<:InputNEO})
     nn_inputs = InputNEONN.(input_neos)
-    X = Matrix{Float64}(undef, length(ensemble.xnames), length(nn_inputs))
+    # element type comes from the inputs (Float64 normally, Dual under AD), so
+    # the whole forward pass stays differentiable
+    T = isempty(nn_inputs) ? Float64 : promote_type(eltype.(nn_inputs)...)
+    X = Matrix{T}(undef, length(ensemble.xnames), length(nn_inputs))
     xnames_val = _get_xnames_without_log10_suffix(ensemble)
     for (i, nn_input) in enumerate(nn_inputs)
         _extract_fields!(view(X, :, i), nn_input, xnames_val)
@@ -655,6 +669,11 @@ Requires the 2D equilibrium: `B_p` at θ=0 is evaluated from the ψ map, since
 the 1D `r B_unit / q` shortcut misses `|∇r|` at θ=0 (1.5-2.4x on a shaped
 equilibrium).
 
+Differentiable w.r.t. the profiles: a `cp1d` carrying `ForwardDiff.Dual`s
+propagates through the network and the force balance (`Er` comes back as a
+Dual). `eqt` must stay Float64 — the 2D ψ interpolant is not Dual-capable —
+which is the frozen-geometry setting FUSE's AD path uses anyway.
+
 CAVEATS
 - The nets carry the training devices' helicity convention (IPCCW/BTCCW are not
   inputs, `q` is forced negative), so the sign of `vpol` — and hence of
@@ -730,7 +749,10 @@ function neoclassical_Er(
             vpol_n, Zs, Ts, aLn, aLT = flows[i].vpol_elec, -one(Z_imp), Te[gp], nn.DLNNDR_3, nn.DLNTDR_3
         end
 
-        Bp_mag = IMAS.Bp(PSI_interpolant, R_omp[gp], Zaxis)   # |B_p| at θ=0 [T]
+        # the ψ map is Float64-only; on a Dual cp1d the grid-interpolated R_omp is a
+        # Dual with zero partials (frozen geometry), so evaluating at its primal
+        # loses nothing
+        Bp_mag = IMAS.Bp(PSI_interpolant, ForwardDiff.value(R_omp[gp]), Zaxis)   # |B_p| at θ=0 [T]
         B_pol = sIp * Bp_mag                                  # +Z at θ=0 for Ip along +φ
         B_tor = Fpol[gp] / R_omp[gp]
         # |∇r| at θ=0 = (∂ψ/∂R)/(dψ/dr) with dψ/dr = r*B_unit/|q| (GACODE)
