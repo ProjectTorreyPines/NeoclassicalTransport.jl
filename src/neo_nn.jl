@@ -661,9 +661,28 @@ CAVEATS
   `Er_vpol` — follows that convention. Validate against a known case before
   trusting the sign on a discharge of opposite helicity; the terms are returned
   separately so `Er_vpol` can be negated.
-- The training NEO runs did not include an equilibrium-scale radial electric
-  field, so `vpol` is the unsqueezed neoclassical flow: orbit squeezing inside
-  a deep E_r well is not represented.
+- `vpol` inherits NEO's local ordering. The training runs DO carry the
+  equilibrium-scale radial electric field -- every input has `ROTATION_MODEL=2`
+  with the experimental `OMEGA_ROT` (= omega_0, and in the sonic ordering
+  omega_0 = -c dPhi_0/dpsi is exactly that field) and its shear
+  `OMEGA_ROT_DERIV`, which is one of the four major scan axes, so E_r-shear
+  space is spanned in training. What is missing is higher order in NEO itself:
+  a local delta-f solver orders the orbit width small against the E_r scale
+  length, so the finite-orbit-width squeezing correction is not captured no
+  matter what omega_0' is supplied. Measured on serial NEO (2026-08-28), a +-20x
+  sweep of OMEGA_ROT_DERIV moves `vpol` by <1% (mastuedge rho 0.97 +-0.1%,
+  nstxedge 0.97 +-0.4%, mastu 0.5 +-0.8%) and the ion energy flux by <1%; the
+  shear response is essentially all in `jpar` (up to ~10%). So the closure is
+  squeezing-free exactly where the well is deepest (the pedestal) -- and a direct
+  NEO run is equally so, this is not an artifact of the network.
+- Rotation ITSELF (omega_0, not its shear) can dominate on a low-field ST edge.
+  Rerunning the same cases with `ROTATION_MODEL=1` changes mastu rho 0.5 by <1%
+  and mastuedge rho 0.97 by ~2%, but nstxedge rho 0.97 by -625% in `vpol` and
+  -2724% in the ion energy flux, with sign flips. `OMEGA_ROT` is a network input
+  so the nets carry this dependence, but it means `Er_vpol` there is only as good
+  as the `w0` behind `cp1d.rotation_frequency_tor_sonic`: if that is a measured
+  impurity toroidal rotation rather than the E x B frequency, the difference
+  propagates straight into the flow prediction.
 - `OMEGA_ROT`/`OMEGA_ROT_DERIV` ARE network inputs (taken from
   `cp1d.rotation_frequency_tor_sonic`), so if you derive them from an assumed
   E_r you should iterate this closure to a fixed point.
