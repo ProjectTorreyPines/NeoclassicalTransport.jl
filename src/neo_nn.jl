@@ -756,7 +756,8 @@ function neoclassical_Er(
         B_pol = sIp * Bp_mag                                  # +Z at θ=0 for Ip along +φ
         B_tor = Fpol[gp] / R_omp[gp]
         # |∇r| at θ=0 = (∂ψ/∂R)/(dψ/dr) with dψ/dr = r*B_unit/|q| (GACODE)
-        grad_r = rmin[gp] > 0 ? R_omp[gp] * Bp_mag * abs(qprof[gp]) / (rmin[gp] * bunit[gp]) : one(Bp_mag)
+        # |∇r| is a magnitude: bunit is signed (negative for B0 < 0, e.g. DIII-D)
+        grad_r = rmin[gp] > 0 ? R_omp[gp] * Bp_mag * abs(qprof[gp]) / (rmin[gp] * abs(bunit[gp])) : one(Bp_mag)
 
         # DLNNDR = -a dln n/dr, DLNTDR = -a dln T/dr; T in eV makes this V/m
         Er_pressure = -(Ts / Zs) * (aLn + aLT) / a * grad_r
