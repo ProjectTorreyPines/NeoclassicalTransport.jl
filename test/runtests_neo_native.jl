@@ -9,7 +9,7 @@
 using NeoclassicalTransport
 using NeoclassicalTransport: NEOParams, NEONative
 using NeoclassicalTransport.NEONative: NEOBasis, gamma2, compute_fcoll, collision_ints, collision_ints_mono,
-    equilibrium, rotation_phi, NEOPattern, assemble, solve_system, transport, solve_neo, tgyro_fluxes, E_ALPHA
+    equilibrium, rotation_phi, NEOPattern, assemble, solve_system, transport, solve_neo, run_neo_native, tgyro_fluxes, E_ALPHA
 using LinearAlgebra
 using SparseArrays
 using OffsetArrays
@@ -359,6 +359,18 @@ end
                 @test isapprox(gm, gb2; rtol=1e-11, atol=1e-13)
             end
         end
+    end
+
+    @testset "batch driver" begin
+        # several surfaces per task, so the per-task factorization cache is reused
+        # across different matrices; threaded must equal serial exactly
+        ps = [NEOParams(joinpath(NEO_REFDIR, c, "input.neo")) for c in ("small", "small_norot", "small_cm3", "small_cm5")]
+        batch = repeat(ps, 3)
+        ser = run_neo_native(batch; serial=true)
+        thr = run_neo_native(batch)
+        @test [s.check_sum for s in thr] == [s.check_sum for s in ser]
+        @test all(thr[i].jpar == solve_neo(batch[i]).jpar for i in eachindex(batch))
+        @test length(run_neo_native(ps[1:1])) == 1
     end
 
     cases = ["small", "small_norot", "small_cm1", "small_cm2", "small_cm3", "small_cm5"]

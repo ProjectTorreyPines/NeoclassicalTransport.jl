@@ -33,6 +33,7 @@ end
 """
     run_neo_native(input_neo::InputNEO; kw...) -> NEOSolution
     run_neo_native(inputs::AbstractVector{<:InputNEO}; serial=false, kw...) -> Vector{NEOSolution}
+    run_neo_native(params::AbstractVector{<:NEOParams}; serial=false, kw...) -> Vector{NEOSolution}
 
 Native-Julia replacement for [`run_neo`](@ref): the same `InputNEO`, solved in
 process. A vector of inputs (e.g. one per transport grid point) is solved as
@@ -41,17 +42,18 @@ factorization cache per task; `serial=true` solves them one after the other.
 Keyword arguments are passed to [`solve_neo`](@ref).
 """
 run_neo_native(input_neo::InputNEO; kw...) = solve_neo(NEOParams(input_neo); kw...)
+run_neo_native(inputs::AbstractVector{<:InputNEO}; kw...) = run_neo_native([NEOParams(inp) for inp in inputs]; kw...)
 
-function run_neo_native(inputs::AbstractVector{<:InputNEO}; serial::Bool=false, kw...)
-    n = length(inputs)
-    params = [NEOParams(inp) for inp in inputs]
+function run_neo_native(params::AbstractVector{<:NEOParams}; serial::Bool=false, kw...)
+    n = length(params)
     T = isempty(params) ? Float64 : promote_type(map(eltype, params)...)
     out = Vector{NEOSolution{T}}(undef, n)
     nchunks = (serial || Threads.nthreads() == 1) ? 1 : min(n, Threads.nthreads())
     if nchunks <= 1
-        cache = NEOFactorCache()
-        for i in 1:n
-            out[i] = solve_neo(params[i]; serial, cache, kw...)
+        let cache = NEOFactorCache()
+            for i in 1:n
+                out[i] = solve_neo(params[i]; serial, cache, kw...)
+            end
         end
         return out
     end
@@ -60,8 +62,10 @@ function run_neo_native(inputs::AbstractVector{<:InputNEO}; serial::Bool=false, 
     try
         chunks = [i:nchunks:n for i in 1:nchunks]
         @sync for chunk in chunks
-            Threads.@spawn begin
-                cache = NEOFactorCache()
+            Threads.@spawn let cache = NEOFactorCache()
+                # `let`: the cache must be task-local; a plain assignment here would
+                # rebind one shared variable and make every task factorize into the
+                # same UmfpackLU
                 for i in chunk
                     out[i] = solve_neo(params[i]; serial, cache, kw...)
                 end
