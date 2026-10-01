@@ -50,7 +50,7 @@ function rotation_phi(p::NEOParams{T}, geo::NEOGeometry) where {T<:Real}
         sum_zn = sum_zn / dens[p.is_ele]
     end
     if abs(_val(sum_zn)) > 1.0e-3
-        @warn "NEONative: rotation is being run without quasi-neutral densities (sum Z n = $(_val(sum_zn)) n_e)"
+        @warn "NEONative: rotation is being run without quasi-neutral densities (sum Z n = $(_val(sum_zn)) n_e)" maxlog = 1
     end
 
     # partial component of n/n(theta0) -- the phi_rot component is added after the QN solve
