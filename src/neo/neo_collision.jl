@@ -37,6 +37,7 @@ reproducing NEO's double-precision recursion.
 """
 function collision_ints(p::NEOParams{T}, basis::NEOBasis=NEOBasis(p); serial::Bool=false, fcoll_exact::Bool=false) where {T<:Real}
     ns, ne, nxi = p.n_species, p.n_energy, p.n_xi
+    fcoll_exact && T !== Float64 && error("NEONative: fcoll_exact=true (extended-precision collision tables) is Float64-only, got $T")
     if p.collision_model == 3 && any(abs(_val(p.temp[is] - p.temp[1])) > 1e-3 for is in 2:ns)
         @warn "NEONative: full HS collisions (collision_model=3) with unequal temperatures"
     end

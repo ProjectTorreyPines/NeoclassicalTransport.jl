@@ -7,14 +7,15 @@
 # run; the gacode regression cases run with NEO_NATIVE_FULL=1.
 
 using NeoclassicalTransport
-using NeoclassicalTransport: NEOParams, NEONative
+using NeoclassicalTransport: NEOParams, NEOSolution, NEONative
 using NeoclassicalTransport.NEONative: NEOBasis, gamma2, compute_fcoll, collision_ints, collision_ints_mono,
-    equilibrium, rotation_phi, NEOPattern, assemble, solve_system, transport, solve_neo, run_neo_native, tgyro_fluxes, E_ALPHA
+    equilibrium, rotation_phi, NEOPattern, assemble, solve_system, transport, solve_neo, run_neo_native, tgyro_fluxes, E_ALPHA, NEOFactorCache
 using LinearAlgebra
 using SparseArrays
 using OffsetArrays
 using Test
 import GACODE
+import ForwardDiff
 
 const SF = NeoclassicalTransport.SpecialFunctions
 const NEO_REFDIR = joinpath(@__DIR__, "neo_reference")
@@ -371,6 +372,142 @@ end
         @test [s.check_sum for s in thr] == [s.check_sum for s in ser]
         @test all(thr[i].jpar == solve_neo(batch[i]).jpar for i in eachindex(batch))
         @test length(run_neo_native(ps[1:1])) == 1
+    end
+
+    @testset "ForwardDiff through solve_neo" begin
+        # NEOParams{Dual}: everything up to the sparse solve propagates the Duals,
+        # solve_system applies the implicit-function rule (values on A0, partials
+        # from A0 g' = b' - A' g0 with the same factorization)
+        d = NEONative.read_input_neo(joinpath(NEO_REFDIR, "small", "input.neo"))
+        keys_ = ["DLNTDR_1", "DLNNDR_2", "TEMP_1", "OMEGA_ROT", "DENS_3"]
+        x0 = [Float64(d[k]) for k in keys_]
+        function neo_params(x)
+            dx = copy(d)
+            for (k, v) in zip(keys_, x)
+                dx[k] = v
+            end
+            return NEOParams{eltype(x)}(dx)
+        end
+        function neo_outputs(x)
+            sol = solve_neo(neo_params(x))
+            return vcat(sol.pflux, sol.eflux, sol.mflux, sol.jpar, sol.uparB)
+        end
+
+        # 1. the rule against a dense generic LU of the Dual matrix (exact Dual propagation)
+        xd = [ForwardDiff.Dual{:neo_test}(x0[k], ForwardDiff.Partials(ntuple(j -> Float64(j == k), 5))) for k in 1:5]
+        D = eltype(xd)
+        pd = neo_params(xd)
+        basis = NEOBasis(pd)
+        geo = NEONative.equilibrium(pd)
+        rot = NEONative.rotation_phi(pd, geo)
+        coll = collision_ints(pd, basis)
+        pattern = NEONative.NEOPattern(pd)
+        A, b, _ = NEONative.assemble(pd, basis, coll, geo, rot, pattern)
+        @test eltype(A) === D
+        g_rule = NEONative.solve_system(A, b, pattern)
+        g_dense = Matrix(A) \ b
+        @test ForwardDiff.value.(g_rule) ≈ ForwardDiff.value.(g_dense) rtol = 1e-10
+        for k in 1:5
+            @test ForwardDiff.partials.(g_rule, k) ≈ ForwardDiff.partials.(g_dense, k) rtol = 1e-10
+        end
+
+        # 2. end to end: ForwardDiff Jacobian of the transport outputs vs central differences
+        y0 = neo_outputs(x0)
+        J = ForwardDiff.jacobian(neo_outputs, x0)
+        @test size(J) == (length(y0), 5)
+        for k in 1:5
+            h = 1e-6 * max(abs(x0[k]), 1.0)
+            xp = copy(x0)
+            xp[k] += h
+            xm = copy(x0)
+            xm[k] -= h
+            Jfd = (neo_outputs(xp) - neo_outputs(xm)) / (2h)
+            # the gradient columns are small (they only enter the RHS), so the
+            # finite-difference round-off eps*|y|/h sets an absolute floor
+            @test isapprox(J[:, k], Jfd; rtol=1e-4, atol=1e-7 * norm(y0))
+        end
+
+        # 3. Dual results, the Float64-only fcoll_exact path, the threaded batch
+        sold = solve_neo(pd; keep_g=true)
+        @test sold isa NEOSolution{D}
+        @test GACODE.FluxSolution(sold) isa GACODE.FluxSolution{D}
+        @test_throws ErrorException solve_neo(pd; fcoll_exact=true)
+        batch = run_neo_native([pd, pd, pd])
+        @test all(s.check_sum === sold.check_sum for s in batch)
+        @test all(s.jpar === sold.jpar for s in batch)
+
+        # 4. factorization reuse: a Dual solve at the primal point just solved does
+        # not refactorize, and gives exactly the Float64 solution as its values
+        cache = NEOFactorCache()
+        s0 = solve_neo(NEOParams{Float64}(d); cache, keep_g=true)
+        F0 = cache.F
+        sd = solve_neo(pd; cache, keep_g=true)
+        @test cache.F === F0
+        @test ForwardDiff.value.(sd.g) == s0.g
+        # changed values on the same pattern refactorize in place (symbolic reuse)
+        s1 = solve_neo(neo_params(x0 .* 1.01); cache)
+        @test cache.F === F0
+        @test s1.check_sum != s0.check_sum
+
+        # 5. caller-owned caches in the batch driver persist across calls
+        ps = [NEOParams(joinpath(NEO_REFDIR, c, "input.neo")) for c in ("small", "small_norot")]
+        caches = [NEOFactorCache() for _ in ps]
+        r1 = run_neo_native(ps; caches)
+        Fs = [c.F for c in caches]
+        r2 = run_neo_native(ps; caches)
+        @test all(caches[i].F === Fs[i] for i in eachindex(ps))
+        @test [s.check_sum for s in r2] == [s.check_sum for s in r1]
+        @test_throws ErrorException run_neo_native(ps; caches=caches[1:1])
+    end
+
+    @testset "stale-factorization GMRES refinement" begin
+        d = NEONative.read_input_neo(joinpath(NEO_REFDIR, "small", "input.neo"))
+        function params_scaled(f)
+            dx = copy(d)
+            for k in ("TEMP_1", "TEMP_2", "TEMP_3", "DENS_1", "DENS_2", "DLNTDR_1", "OMEGA_ROT")
+                dx[k] = d[k] * f
+            end
+            return NEOParams{Float64}(dx)
+        end
+        cache = NEOFactorCache(; refine=true)
+        s0 = solve_neo(params_scaled(1.0); cache, keep_g=true)
+        @test cache.n_factorizations == 1
+        @test cache.resid0 < 1e-8
+        # changed matrices: GMRES on the old factorization, no refactorization
+        for f in (1.01, 1.1)
+            p1 = params_scaled(f)
+            s1 = solve_neo(p1; cache, keep_g=true)
+            @test cache.n_factorizations == 1
+            s1_fresh = solve_neo(p1; keep_g=true)
+            @test isapprox(s1.g, s1_fresh.g; rtol=1e-7)
+            @test isapprox(s1.check_sum, s1_fresh.check_sum; rtol=1e-8)
+            @test all(isapprox.(s1.eflux, s1_fresh.eflux; rtol=1e-7))
+        end
+        @test cache.n_refined == 2
+        # a very different matrix is still solved correctly (refined or refactorized)
+        p2 = params_scaled(4.0)
+        s2 = solve_neo(p2; cache, keep_g=true)
+        @test isapprox(s2.g, solve_neo(p2; keep_g=true).g; rtol=1e-7)
+        # Dual solve at a nearby point: the values go through GMRES, the partial
+        # block refactorizes, and the next Dual pass at the same point is a cache hit
+        nfact = cache.n_factorizations
+        xd = ForwardDiff.Dual{:neo_refine}(1.0, ForwardDiff.Partials((1.0, 0.0)))
+        dx = copy(d)
+        dx["TEMP_1"] = d["TEMP_1"] * 4.0 * (1 + 1e-3 * xd)
+        pd = NEOParams{eltype(xd)}(dx)
+        sd = solve_neo(pd; cache)
+        @test cache.n_factorizations == nfact + 1
+        sd2 = solve_neo(pd; cache)
+        @test cache.n_factorizations == nfact + 1
+        @test sd2.check_sum === sd.check_sum
+        dx0 = copy(d)
+        dx0["TEMP_1"] = d["TEMP_1"] * 4.0 * (1 + 1e-3)
+        @test ForwardDiff.value(sd.check_sum) ≈ solve_neo(NEOParams{Float64}(dx0)).check_sum rtol = 1e-9
+        # the default cache never refines
+        plain = NEOFactorCache()
+        solve_neo(params_scaled(1.0); cache=plain)
+        solve_neo(params_scaled(1.01); cache=plain)
+        @test plain.n_factorizations == 2 && plain.n_refined == 0
     end
 
     cases = ["small", "small_norot", "small_cm1", "small_cm2", "small_cm3", "small_cm5"]

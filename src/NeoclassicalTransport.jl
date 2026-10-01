@@ -7,7 +7,7 @@ import ForwardDiff
 include("input_neo.jl")
 
 include("neo/NEONative.jl")
-using .NEONative: NEONative, NEOParams, NEOSolution, solve_neo, run_neo_native
+using .NEONative: NEONative, NEOParams, NEOSolution, NEOFactorCache, solve_neo, run_neo_native
 
 include("models.jl")
 

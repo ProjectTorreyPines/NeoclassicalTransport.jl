@@ -30,7 +30,7 @@ include("neo_solve.jl")
 include("neo_transport.jl")
 include("neo_driver.jl")
 
-export NEOParams, NEOBasis, NEOCollision, NEOGeometry, NEORotation, NEOSolution
+export NEOParams, NEOBasis, NEOCollision, NEOGeometry, NEORotation, NEOSolution, NEOFactorCache
 export solve_neo, run_neo_native
 
 end

@@ -12,8 +12,12 @@ collision matrices, assembly, sparse LU, transport moments.
   species-pair collision build and the row-wise assembly; results are
   identical either way).
 - `keep_g=true` stores the solution vector in the result.
-- `cache::NEOFactorCache` reuses the UMFPACK symbolic analysis between solves
-  on the same grid sizes (one cache per task).
+- `cache::NEOFactorCache` reuses the UMFPACK factorization between solves:
+  the symbolic analysis on the same grid sizes, the whole factorization when
+  the matrix values are unchanged (one cache per task).
+- `p::NEOParams{<:ForwardDiff.Dual}` is supported: everything up to the sparse
+  solve propagates the Duals, the solve itself uses the implicit-function rule
+  (see [`solve_system`](@ref)), so the result is a `NEOSolution{Dual}`.
 - `fcoll_exact=true` builds the field-particle collision integrals in extended
   precision instead of NEO's (unstable) double-precision recursion, see
   [`compute_fcoll`](@ref). Default `false` reproduces Fortran NEO.
@@ -32,27 +36,36 @@ end
 
 """
     run_neo_native(input_neo::InputNEO; kw...) -> NEOSolution
-    run_neo_native(inputs::AbstractVector{<:InputNEO}; serial=false, kw...) -> Vector{NEOSolution}
-    run_neo_native(params::AbstractVector{<:NEOParams}; serial=false, kw...) -> Vector{NEOSolution}
+    run_neo_native(inputs::AbstractVector{<:InputNEO}; serial=false, caches=nothing, kw...) -> Vector{NEOSolution}
+    run_neo_native(params::AbstractVector{<:NEOParams}; serial=false, caches=nothing, kw...) -> Vector{NEOSolution}
 
 Native-Julia replacement for [`run_neo`](@ref): the same `InputNEO`, solved in
 process. A vector of inputs (e.g. one per transport grid point) is solved as
-a batch, split over threads with BLAS single-threaded for the duration and one
-factorization cache per task; `serial=true` solves them one after the other.
-Keyword arguments are passed to [`solve_neo`](@ref).
+a batch, split over threads with BLAS single-threaded for the duration;
+`serial=true` solves them one after the other. Keyword arguments are passed
+to [`solve_neo`](@ref).
+
+`caches::Vector{NEOFactorCache}` (one per input, owned by the caller) keeps
+the factorizations between calls: the next call with the same grid sizes
+reuses the symbolic analysis, and a call with the same matrix values (e.g. the
+`ForwardDiff.Dual` passes of a Jacobian at the primal point just solved) skips
+the factorization altogether. Without `caches` each task uses its own
+temporary cache.
 """
 run_neo_native(input_neo::InputNEO; kw...) = solve_neo(NEOParams(input_neo); kw...)
 run_neo_native(inputs::AbstractVector{<:InputNEO}; kw...) = run_neo_native([NEOParams(inp) for inp in inputs]; kw...)
 
-function run_neo_native(params::AbstractVector{<:NEOParams}; serial::Bool=false, kw...)
+function run_neo_native(params::AbstractVector{<:NEOParams}; serial::Bool=false,
+    caches::Union{Nothing,AbstractVector{NEOFactorCache}}=nothing, kw...)
     n = length(params)
+    caches === nothing || length(caches) == n || error("NEONative: `caches` must hold one NEOFactorCache per input (got $(length(caches)) for $n inputs)")
     T = isempty(params) ? Float64 : promote_type(map(eltype, params)...)
     out = Vector{NEOSolution{T}}(undef, n)
     nchunks = (serial || Threads.nthreads() == 1) ? 1 : min(n, Threads.nthreads())
     if nchunks <= 1
         let cache = NEOFactorCache()
             for i in 1:n
-                out[i] = solve_neo(params[i]; serial, cache, kw...)
+                out[i] = solve_neo(params[i]; serial, cache=(caches === nothing ? cache : caches[i]), kw...)
             end
         end
         return out
@@ -67,7 +80,7 @@ function run_neo_native(params::AbstractVector{<:NEOParams}; serial::Bool=false,
                 # rebind one shared variable and make every task factorize into the
                 # same UmfpackLU
                 for i in chunk
-                    out[i] = solve_neo(params[i]; serial, cache, kw...)
+                    out[i] = solve_neo(params[i]; serial, cache=(caches === nothing ? cache : caches[i]), kw...)
                 end
             end
         end

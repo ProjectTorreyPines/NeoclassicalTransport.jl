@@ -165,16 +165,44 @@ sol  = NeoclassicalTransport.solve_neo(p; serial=true)  # plain loops everywhere
 ```
 
 Parallelism: the species-pair collision build and the row-wise assembly use
-`Threads.@threads`; a batch of inputs is split over tasks, each with its own
-UMFPACK factorization cache (symbolic analysis reused across the batch) and
-BLAS single-threaded for the duration. `serial=true` gives bit-identical
-results on plain loops. Start Julia with `-t N` to use it.
+`Threads.@threads`; a batch of inputs is split over tasks with BLAS
+single-threaded for the duration. `serial=true` gives bit-identical results
+on plain loops. Start Julia with `-t N` to use it.
 
-Supported: `collision_model=4`, `equilibrium_model` 0/1/2, `rotation_model`
-1/2, `laguerre_method` 1–4, adiabatic or kinetic electrons, `sim_model` 1/2.
-Anything else (`profile_model=2`, 3D, Spitzer, anisotropic species,
-`coll_uncoupled*`) is rejected with an explicit error. `ForwardDiff` Duals
-flow through everything up to the sparse solve, which is Float64-only.
+Cost and factorization reuse: the UMFPACK factorization is 85–95 % of a
+solve (5 species on the default 6/17/17 grid: 10 710 rows, ~0.66 s for the
+factorization, ~0.02 s for everything else at 8 threads). UMFPACK's own
+strategy choice is the slow one for these matrices, so from 4 species on the
+unsymmetric strategy is used (4 species 1.18 → 0.41 s, 5 species 1.09 →
+0.66 s, and a 1e3–1e4 smaller residual). Pass caller-owned caches to reuse
+factorizations across calls:
+
+```julia
+caches = [NeoclassicalTransport.NEOFactorCache(; refine=true) for _ in ineos]
+sols = NeoclassicalTransport.run_neo_native(ineos; caches)   # call again as the profiles evolve
+```
+
+A solve with the same matrix values (the `ForwardDiff` passes of a Jacobian
+at the point just solved) skips the factorization; with `refine=true` a solve
+on a slightly changed matrix (the next flux-matcher evaluation) uses the old
+factorization as a GMRES preconditioner, 4–14 iterations for 0.1–10 % changes,
+and only refactorizes when that does not converge. Without `caches` each task
+uses a temporary cache; `refine` is off by default so results stay
+bit-reproducible.
+
+Differentiation: `NEOParams{<:ForwardDiff.Dual}` (e.g. from an `InputNEO`
+built from a Dual-valued `dd`) flows through every stage; the sparse solve
+applies the implicit-function rule, `g₀ = A₀⁻¹b₀`, `ġ = A₀⁻¹(ḃ − Ȧ g₀)`, on
+the Float64 factorization, so a `NEOSolution{Dual}` costs one factorization
+plus one triangular solve per partial. FUSE's `ActorFluxMatcher` uses this for
+`jacobian_method=:forward_ad` with `model=:neo, neo_backend=:julia`.
+
+Supported: `collision_model` 1–5 (4 is the default full Fokker-Planck),
+`equilibrium_model` 0/1/2, `rotation_model` 1/2, `laguerre_method` 1–4,
+adiabatic or kinetic electrons, `sim_model` 1/2. Anything else
+(`profile_model=2`, 3D, Spitzer, anisotropic species, `coll_uncoupled*`) is
+rejected with an explicit error. `utilities/profile_native_neo.jl` prints the
+per-stage timings and the UMFPACK variants on the reference cases.
 
 Validation (`test/runtests_neo_native.jl`): every intermediate array
 (basis, collision matrices, geometry, rotation), the assembled system
