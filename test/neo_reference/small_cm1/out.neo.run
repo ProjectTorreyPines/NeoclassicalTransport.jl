@@ -1,0 +1,117 @@
+ CONTROL PARAMETERS
+ ------------------
+ sim_model                     : NUMERICAL (with theory)
+ ae_flag                       : KINETIC ELECTRONS
+ collision_model               : CONNOR
+ equilibrium_model             : MILLER
+ profile_model                 : LOCAL
+ sign_q                        : POSITIVE
+ sign_bunit                    : POSITIVE (BT CW)
+ rotation model                : ROTATION EFFECTS INCLUDED
+ spitzer_model:                : OFF (NEOCLASSICAL TRANSPORT)
+ threed_model:                 : AXISYMMETRIC EQUILIBRIUM
+ 
+ GRID DIMENSIONS
+ ---------------
+ n_radial         :   1
+ n_energy         :   3
+ n_xi             :   6
+ n_theta          :   9
+ 
+ PHYSICS PARAMETERS
+ ------------------
+       r/a:  5.0000E-01
+       R/a:  3.0000E+00        shift: -1.0000E-01
+         q:  2.0000E+00            s:  1.0000E+00
+      zmag:  2.0000E-02        dzmag:  1.0000E-02
+     kappa:  1.5000E+00      s_kappa:  2.0000E-01
+     delta:  2.0000E-01      s_delta:  1.0000E-01
+      zeta:  5.0000E-02       s_zeta:  2.0000E-02
+      sin3:  2.0000E-02       s_sin3:  1.0000E-02
+      sin4:  0.0000E+00       s_sin4:  0.0000E+00
+      sin5:  0.0000E+00       s_sin5:  0.0000E+00
+      sin6:  0.0000E+00       s_sin6:  0.0000E+00
+      cos0:  1.0000E-02       s_cos0:  0.0000E+00
+      cos1: -2.0000E-02       s_cos1:  1.0000E-02
+      cos2:  0.0000E+00       s_cos2:  0.0000E+00
+      cos3:  0.0000E+00       s_cos3:  0.0000E+00
+      cos4:  0.0000E+00       s_cos4:  0.0000E+00
+      cos5:  0.0000E+00       s_cos5:  0.0000E+00
+      cos6:  0.0000E+00       s_cos6:  0.0000E+00
+ 
+  dphi0/dr:  0.0000E+00
+     omega:  2.0000E-01    domega/dr: -5.0000E-01
+     epar0:  1.0000E-01
+ 
+indx   z       n/n_norm     T/T_norm     m/m_norm     a/Ln         a/Lt         nu
+  1    1.000   9.0000E-01   1.0000E+00   1.0000E+00   1.0000E+00   3.0000E+00   5.0000E-02
+  2   -1.000   1.0000E+00   8.0000E-01   2.7245E-04   1.0000E+00   2.5000E+00   4.7038E+00
+  3    6.000   1.6667E-02   1.2000E+00   5.9596E+00   8.0000E-01   3.0000E+00   3.7394E-01
+ ------------------
+ 
+ Estimated memory (GB) =  0.30764E-01
+ Begin matrix factor -- UMFPACK
+ Done matrix factor -- UMFPACK
+ Begin matrix solve -- UMFPACK
+ Done matrix solve -- UMFPACK
+ 
+ r/a =                 0.50000E+00
+ jpar =                0.14892E+03
+ sum Z_s Gamma_s =    -0.30601E-03
+  Z       pflux         eflux         mflux
+  1.000  -0.72217E-03  -0.23685E-02  -0.12747E-02
+ -1.000  -0.47959E-03  -0.13951E-02  -0.23108E-06
+  6.000  -0.10571E-04  -0.24708E-04  -0.16021E-03
+ ------------------
+ 
+ CONTROL PARAMETERS
+ ------------------
+ sim_model                     : NUMERICAL (with theory)
+ ae_flag                       : KINETIC ELECTRONS
+ collision_model               : CONNOR
+ equilibrium_model             : MILLER
+ profile_model                 : LOCAL
+ sign_q                        : POSITIVE
+ sign_bunit                    : POSITIVE (BT CW)
+ rotation model                : ROTATION EFFECTS INCLUDED
+ spitzer_model:                : OFF (NEOCLASSICAL TRANSPORT)
+ threed_model:                 : AXISYMMETRIC EQUILIBRIUM
+ 
+ GRID DIMENSIONS
+ ---------------
+ n_radial         :   1
+ n_energy         :   3
+ n_xi             :   6
+ n_theta          :   9
+ 
+ PHYSICS PARAMETERS
+ ------------------
+       r/a:  5.0000E-01
+       R/a:  3.0000E+00        shift: -1.0000E-01
+         q:  2.0000E+00            s:  1.0000E+00
+      zmag:  2.0000E-02        dzmag:  1.0000E-02
+     kappa:  1.5000E+00      s_kappa:  2.0000E-01
+     delta:  2.0000E-01      s_delta:  1.0000E-01
+      zeta:  5.0000E-02       s_zeta:  2.0000E-02
+      sin3:  2.0000E-02       s_sin3:  1.0000E-02
+      sin4:  0.0000E+00       s_sin4:  0.0000E+00
+      sin5:  0.0000E+00       s_sin5:  0.0000E+00
+      sin6:  0.0000E+00       s_sin6:  0.0000E+00
+      cos0:  1.0000E-02       s_cos0:  0.0000E+00
+      cos1: -2.0000E-02       s_cos1:  1.0000E-02
+      cos2:  0.0000E+00       s_cos2:  0.0000E+00
+      cos3:  0.0000E+00       s_cos3:  0.0000E+00
+      cos4:  0.0000E+00       s_cos4:  0.0000E+00
+      cos5:  0.0000E+00       s_cos5:  0.0000E+00
+      cos6:  0.0000E+00       s_cos6:  0.0000E+00
+ 
+  dphi0/dr:  0.0000E+00
+     omega:  2.0000E-01    domega/dr: -5.0000E-01
+     epar0:  1.0000E-01
+ 
+indx   z       n/n_norm     T/T_norm     m/m_norm     a/Ln         a/Lt         nu
+  1    1.000   9.0000E-01   1.0000E+00   1.0000E+00   1.0000E+00   3.0000E+00   5.0000E-02
+  2   -1.000   1.0000E+00   8.0000E-01   2.7245E-04   1.0000E+00   2.5000E+00   4.7038E+00
+  3    6.000   1.6667E-02   1.2000E+00   5.9596E+00   8.0000E-01   3.0000E+00   3.7394E-01
+ ------------------
+ 

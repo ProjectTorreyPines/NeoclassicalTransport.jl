@@ -37,3 +37,9 @@ test.json
 asd.jl
 # site-built serial NEO binary (build with utilities/serial_neo/Makefile)
 utilities/serial_neo/neo_serial
+
+# serial/dump NEO build products (utilities/serial_neo)
+utilities/serial_neo/neo_serial
+utilities/serial_neo/neo_dump
+utilities/serial_neo/neo_do_dump.f90
+utilities/serial_neo/*.o

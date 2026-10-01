@@ -312,3 +312,7 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test_throws ErrorException NeoclassicalTransport.save_inputneo(ineo_ad, tempname())
     end
 end
+
+# native NEO port (src/neo/) against Fortran NEO reference data; the gacode
+# regression and FUSE cases need NEO_NATIVE_FULL=1
+include("runtests_neo_native.jl")

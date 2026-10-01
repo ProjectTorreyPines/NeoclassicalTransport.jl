@@ -1,0 +1,10 @@
+# r/a=  0.15000000E+00
+# Z       pflux_dke     eflux_dke     mflux_dke
+#         (GB)          (GB)          (GB)
+  1.000  -0.13268E-06   0.88631E-01  -0.53397E-06
+# Z       pflux_gv      eflux_gv      mflux_gv
+#         (GB)          (GB)          (GB)
+  1.000   0.00000E+00   0.44731E-18   0.12250E-17
+# Z       pflux_tgyro   eflux_tgyro   mflux_tgyro
+#         (GB)          (GB)          (GB)
+  1.000  -0.13268E-06   0.88631E-01  -0.53397E-06
