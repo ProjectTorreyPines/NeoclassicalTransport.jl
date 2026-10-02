@@ -57,9 +57,7 @@ function compute_fcoll(m0::Int, lambda_in::T; exact::Bool=false) where {T<:Real}
         beta[m, n] = gam[m+1] * gam[n+1] / gam[m+n+2]
     end
 
-    #-------------------------------------------------------
     # STAGE A: GB(m,n,lambda)
-    #-------------------------------------------------------
     lambda = lambda_in
     r = 1.0 / (1.0 + lambda)
 
@@ -98,9 +96,7 @@ function compute_fcoll(m0::Int, lambda_in::T; exact::Bool=false) where {T<:Real}
         gb[m, n] = gb[m, n] + x
     end
 
-    #-------------------------------------------------------
     # STAGE B: G(n,m,lambda) = GB(m,n,1/lambda)
-    #-------------------------------------------------------
     lambda = 1 / lambda_in
     r = 1.0 / (1.0 + lambda)
 
@@ -136,9 +132,7 @@ function compute_fcoll(m0::Int, lambda_in::T; exact::Bool=false) where {T<:Real}
         g[n, m] = g[n, m] + x
     end
 
-    #-------------------------------------------------------
     # STAGE C: special (negative) elements
-    #-------------------------------------------------------
     lambda = lambda_in
 
     # Case 1: special elements of g
@@ -213,9 +207,7 @@ function compute_fcoll(m0::Int, lambda_in::T; exact::Bool=false) where {T<:Real}
         end
     end
 
-    #-------------------------------------
-    # CONCLUSION: f, fb from g, gb
-    #-------------------------------------
+    # f, fb from g, gb
     for m in -m0:m0, n in -m0:m0
         if m + n >= -1
             f[m, n] = g[m, n] * 0.25 * gam[m+n+2] / lambda^((n + 1) / 2.0)

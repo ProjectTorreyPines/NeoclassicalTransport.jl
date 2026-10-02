@@ -120,7 +120,6 @@ function _build_basis(ne::Int, nxi::Int, laguerre_method::Int)
     fill!(evec_e05, 0.0)
     fill!(evec_e105, 0.0)
 
-    # vectors
     for ie in 0:ne, ix in 0:nxi
         for ke in 0:ie
             zarg0 = (-1.0)^ke

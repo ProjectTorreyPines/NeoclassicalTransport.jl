@@ -1,10 +1,11 @@
 # Reference tests of the native NEO port (src/neo/) against Fortran NEO.
 #
 # The reference data in test/neo_reference/<case>/ is produced by
-# test/neo_reference/generate.sh (utilities/serial_neo/neo_dump.f90) and holds
-# every intermediate array at full precision (out.neo.dump), the solution
-# vector (out.neo.f) and NEO's standard outputs. The `small*` cases always
-# run; the gacode regression cases run with NEO_NATIVE_FULL=1.
+# test/neo_reference/generate.sh (utilities/serial_neo/neo_dump.f90): NEO's
+# standard outputs for every case, plus every intermediate array at full
+# precision (out.neo.dump) and the solution vector (out.neo.f) for the `small*`
+# cases and reg12. The `small*` cases always run; the gacode regression cases
+# run with NEO_NATIVE_FULL=1.
 
 using NeoclassicalTransport
 using NeoclassicalTransport: NEOParams, NEOSolution, NEONative

@@ -11,16 +11,14 @@
 #
 # Per case directory the following are kept:
 #   input.neo              the input (hand-written or copied from gacode)
-#   out.neo.run            NEO's own log (settings echo)
-#   out.neo.equil          remapped profiles (e16.8)
 #   out.neo.transport      per-species dke results (e16.8)
 #   out.neo.transport_gv   gyroviscous fluxes (e16.8)
 #   out.neo.transport_flux GB-normalised fluxes incl. the tgyro block
 #   out.neo.prec           check_sum (what gacode's regression test compares)
-#   out.neo.dump           full-precision setup arrays (neo_dump.f90)
-#   out.neo.f              full-precision solution vector g
+#   out.neo.dump           full-precision setup arrays (neo_dump.f90; small*, reg12 only)
+#   out.neo.f              full-precision solution vector g (small*, reg12 only)
 #   out.neo.dump_fcoll     fcoll tables (only kept for the `small` case)
-#   out.neo.diagnostic_coll*  mono-basis matrices if WRITE_CMOMENTS_FLAG=1
+#   out.neo.diagnostic_coll{test,field}  mono-basis matrices if WRITE_CMOMENTS_FLAG=1
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -65,10 +63,13 @@ for c in $CASES; do
         # trim what the tests do not read
         rm -f out.neo.vel out.neo.vel_fourier out.neo.phi out.neo.grid \
               out.neo.theory out.neo.theory_nclass out.neo.species \
-              out.neo.diagnostic_geo out.neo.diagnostic_geo2 \
+              out.neo.diagnostic_geo out.neo.diagnostic_geo2 out.neo.diagnostic_coll \
               out.neo.rotation out.neo.diagnostic_rot out.neo.transport_exp \
-              out.neo.gxi out.neo.gxi_t out.neo.gxi_x
+              out.neo.gxi out.neo.gxi_t out.neo.gxi_x out.neo.equil out.neo.run
         if [ "$c" != "small" ]; then rm -f out.neo.dump_fcoll; fi
+        # the full-precision dumps are large (~24 bytes per value); keep them for the
+        # CI cases and one full-size case, the others are checked end to end
+        case "$c" in small*|reg12) ;; *) rm -f out.neo.dump out.neo.f ;; esac
         cat out.neo.prec; echo
     )
 done
