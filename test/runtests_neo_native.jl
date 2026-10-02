@@ -10,11 +10,12 @@ using NeoclassicalTransport
 using NeoclassicalTransport: NEOParams, NEOSolution, NEONative
 using NeoclassicalTransport.NEONative: NEOBasis, gamma2, compute_fcoll, collision_ints, collision_ints_mono,
     equilibrium, rotation_phi, NEOPattern, assemble, solve_system, transport, solve_neo, run_neo_native, tgyro_fluxes, E_ALPHA, NEOFactorCache
-using LinearAlgebra
-using SparseArrays
-using OffsetArrays
+# stdlibs and GACODE through the package: under Pkg.test only test/Project.toml is on the load path
+using NeoclassicalTransport.NEONative.LinearAlgebra
+using NeoclassicalTransport.NEONative.SparseArrays
+using NeoclassicalTransport.NEONative.OffsetArrays
 using Test
-import GACODE
+const GACODE = NeoclassicalTransport.GACODE
 import ForwardDiff
 
 const SF = NeoclassicalTransport.SpecialFunctions
