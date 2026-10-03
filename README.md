@@ -2,8 +2,7 @@
 
 Neoclassical transport for IMAS data (used by FUSE):
 
-- **NEO**: a native Julia port of the GACODE drift-kinetic solver, run in process
-  (no executable, no MPI), differentiable with ForwardDiff
+- **NEO**: a native Julia port of the GACODE drift-kinetic solver, no Fortran executable needed, differentiable with ForwardDiff
 - **NEO-NN**: neural-network surrogates of NEO
 - **Hirshman-Sigmar** and **Chang-Hinton** analytic models
 - `run_neo`: calls a locally installed Fortran NEO executable
