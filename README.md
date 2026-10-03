@@ -4,8 +4,6 @@ Calls the drift-kinetic solver NEO for high-accuracy neoclassical calculations.
 It also implements Chang-Hinton and Hirshman-Sigmar neoclassical calculations,
 and ships NEO-NN neural-network surrogates of NEO (no NEO executable needed).
 
-NOTE: Running NEO requires GACODE executables to be locally installed. 
-
 ## NEO-NN
 
 Ensemble neural-network surrogates (20 members each) trained on Fokker-Planck NEO
