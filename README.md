@@ -1,8 +1,68 @@
 # NeoclassicalTransport.jl
 
-Calls the drift-kinetic solver NEO for high-accuracy neoclassical calculations.
-It also implements Chang-Hinton and Hirshman-Sigmar neoclassical calculations,
-and ships NEO-NN neural-network surrogates of NEO (no NEO executable needed).
+Neoclassical transport for IMAS data (used by FUSE):
+
+- **NEO**: a native Julia port of the GACODE drift-kinetic solver, run in process
+  (no executable, no MPI), differentiable with ForwardDiff
+- **NEO-NN**: neural-network surrogates of NEO
+- **Hirshman-Sigmar** and **Chang-Hinton** analytic models
+- `run_neo`: calls a locally installed Fortran NEO executable
+
+## NEO
+
+The port covers NEO's local, axisymmetric solve: collision models 1–5 (default 4,
+full linearized Fokker-Planck), s-alpha / large-aspect-ratio / Miller geometry, strong
+rotation, adiabatic or kinetic electrons. Results match Fortran NEO to ~1e-8.
+
+```julia
+using NeoclassicalTransport
+ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, gridpoint)   # from an IMAS dd (same input as run_neo)
+sol  = NeoclassicalTransport.run_neo_native(ineo)              # -> NEOSolution
+sol.pflux, sol.eflux, sol.mflux        # per-species fluxes, NEO normalizations
+sol.jpar, sol.uparB, sol.vpol_th0      # bootstrap current, parallel flows, poloidal velocity
+GACODE.FluxSolution(sol)               # the lumped gyroBohm fluxes run_neo returns
+
+sols = NeoclassicalTransport.run_neo_native(ineos)   # a batch, threaded over the inputs (julia -t N)
+p    = NeoclassicalTransport.NEOParams("input.neo")  # or from an input.neo file
+sol  = NeoclassicalTransport.solve_neo(p)
+```
+
+Options: `ineo.COLLISION_MODEL = 1..5`; `solve_neo(p; serial=true)` runs plain loops
+(bit-identical, for debugging); `keep_g=true` keeps the distribution function.
+Unsupported NEO features (`profile_model=2`, 3D, Spitzer, anisotropic species) raise an
+explicit error.
+
+A solve is dominated by the sparse factorization (~0.7 s for 5 species on the default
+grid, ~0.2 s for 3). When the same surfaces are solved repeatedly, keep caches to reuse
+the factorizations; a repeated 5-species point then costs ~0.05 s:
+
+```julia
+caches = [NeoclassicalTransport.NEOFactorCache(; refine=true) for _ in ineos]
+sols = NeoclassicalTransport.run_neo_native(ineos; caches)   # call again as the profiles evolve
+```
+
+Differentiation: an `InputNEO` built from a Dual-valued `dd` (FUSE's
+`jacobian_method=:forward_ad`), or `InputNEO{D}(ineo)` with Duals on its fields, gives
+a `NEOSolution{Dual}`; the sparse solve uses an implicit-function rule, so derivatives
+cost one triangular solve per partial on top of the Float64 factorization.
+
+Verification: `test/runtests_neo_native.jl` compares every intermediate array, the
+assembled system, the solution vector and all transport outputs against Fortran NEO
+reference data in `test/neo_reference/` (regenerate with `test/neo_reference/generate.sh`
+and a gacode installation). `NEO_NATIVE_FULL=1` adds gacode's regression cases reg01–15.
+The one known discrepancy is NEO's own: its double-precision recursion for the
+field-particle integrals is unstable for `0.1 <= (vth_a/vth_b)^2 <= 10`, where Fortran
+and Julia agree only to ~1e-6; `solve_neo(p; fcoll_exact=true)` evaluates those integrals
+in extended precision.
+
+## Analytic models
+
+```julia
+geom = NeoclassicalTransport.get_equilibrium_geometry(eqt, cp1d)
+prof = NeoclassicalTransport.get_plasma_profiles(eqt, cp1d)
+sol  = NeoclassicalTransport.hirshmansigmar(gridpoint, eqt, cp1d, prof, geom)   # GACODE.FluxSolution
+sol  = NeoclassicalTransport.changhinton(eqt, cp1d, rho, 1)                      # ion energy flux only
+```
 
 ## NEO-NN
 
@@ -114,10 +174,7 @@ Caveats:
   compare `run_neonn(input_neo)` vs `run_neo(input_neo)` at a few radii.
   (Cross-checked on actual training inputs: ≤1.5% per channel at mid-radius
   against full Fokker-Planck NEO.) On login nodes where the `neo -e` wrapper
-  cannot launch (srun/mpirun dispatch), source your GACODE environment and call
-  `NeoclassicalTransport.use_serial_neo!()` — this builds the serial no-MPI NEO
-  from `utilities/serial_neo/` against your gacode tree (once) and points
-  `run_neo` at it via `NEO_EXECUTABLE`. The comparison notebook does this
+  cannot launch, see `use_serial_neo!()` below; the comparison notebook calls it
   automatically when it detects `GACODE_ROOT`.
 
 Notebooks:
@@ -131,94 +188,17 @@ Notebooks:
   log10/standardization input pipeline and output de-standardization yourself;
   batch-first `[N, features]` layout).
 
-Link to instructions on GACODE installation: https://fuse.help/install.html#Install-GACODE
+## Fortran NEO (`run_neo`)
 
-See the note following step 6 - you may need to replace `mpif90-openmpi-mp` with `mpif90-openmpi-gcc12`
-in the platform-specific make file found in `$GACODE_ROOT/platform/build/make.inc.OSX_MONTEREY` and
-`mpirun-openmpi-mp` with `mpirun-openmpi-gcc12` in the platform exec file found in
-`$GACODE_ROOT/platform/exec/exec.OSX_MONTEREY`.
-
-## Native NEO (Julia port)
-
-`src/neo/` is a Julia port of the local (`profile_model=1`), axisymmetric
-drift-kinetic solve of GACODE NEO with the full linearized Fokker-Planck
-collision operator (`collision_model=4`): the Laguerre/Legendre energy basis,
-the closed-form field-particle integrals (`neo_compute_fcoll`), s-alpha /
-large-aspect-ratio / Miller (MXH) geometry, strong rotation
-(`rotation_model=2`, poloidal density variation from quasi-neutrality), the
-sparse kinetic matrix, the UMFPACK solve, and every transport moment NEO
-writes (fluxes, gyroviscous fluxes, bootstrap current, parallel flows,
-poloidal/toroidal velocities). It runs in process, so there is no file I/O,
-no external binary and no MPI:
-
-```julia
-ineo = NeoclassicalTransport.InputNEO(eqt, cp1d, gridpoint)   # same input as run_neo
-sol  = NeoclassicalTransport.run_neo_native(ineo)              # -> NEOSolution
-sol.pflux, sol.eflux, sol.jpar, sol.vpol_th0                   # NEO normalizations, per species
-GACODE.FluxSolution(sol)                                       # the lumped fluxes run_neo returns
-
-sols = NeoclassicalTransport.run_neo_native(ineos)   # a batch: threaded over the inputs
-p    = NeoclassicalTransport.NEOParams("input.neo")  # or straight from an input.neo file
-sol  = NeoclassicalTransport.solve_neo(p; serial=true)  # plain loops everywhere (debugging)
-```
-
-Parallelism: the species-pair collision build and the row-wise assembly use
-`Threads.@threads`; a batch of inputs is split over tasks with BLAS
-single-threaded for the duration. `serial=true` gives bit-identical results
-on plain loops. Start Julia with `-t N` to use it.
-
-Cost and factorization reuse: the UMFPACK factorization is 85–95 % of a
-solve (5 species on the default 6/17/17 grid: 10 710 rows, ~0.66 s for the
-factorization, ~0.02 s for everything else at 8 threads). UMFPACK's own
-strategy choice is the slow one for these matrices, so from 4 species on the
-unsymmetric strategy is used (4 species 1.18 → 0.41 s, 5 species 1.09 →
-0.66 s, and a 1e3–1e4 smaller residual). Pass caller-owned caches to reuse
-factorizations across calls:
-
-```julia
-caches = [NeoclassicalTransport.NEOFactorCache(; refine=true) for _ in ineos]
-sols = NeoclassicalTransport.run_neo_native(ineos; caches)   # call again as the profiles evolve
-```
-
-A solve with the same matrix values (the `ForwardDiff` passes of a Jacobian
-at the point just solved) skips the factorization; with `refine=true` a solve
-on a slightly changed matrix (the next flux-matcher evaluation) uses the old
-factorization as a GMRES preconditioner, 4–14 iterations for 0.1–10 % changes,
-and only refactorizes when that does not converge. Without `caches` each task
-uses a temporary cache; `refine` is off by default so results stay
-bit-reproducible.
-
-Differentiation: `NEOParams{<:ForwardDiff.Dual}` (e.g. from an `InputNEO`
-built from a Dual-valued `dd`) flows through every stage; the sparse solve
-applies the implicit-function rule, `g₀ = A₀⁻¹b₀`, `ġ = A₀⁻¹(ḃ − Ȧ g₀)`, on
-the Float64 factorization, so a `NEOSolution{Dual}` costs one factorization
-plus one triangular solve per partial. FUSE's `ActorFluxMatcher` uses this for
-`jacobian_method=:forward_ad` with `model=:neo, neo_backend=:julia`.
-
-Supported: `collision_model` 1–5 (4 is the default full Fokker-Planck),
-`equilibrium_model` 0/1/2, `rotation_model` 1/2, `laguerre_method` 1–4,
-adiabatic or kinetic electrons, `sim_model` 1/2. Anything else
-(`profile_model=2`, 3D, Spitzer, anisotropic species, `coll_uncoupled*`) is
-rejected with an explicit error. `utilities/profile_native_neo.jl` prints the
-per-stage timings and the UMFPACK variants on the reference cases.
-
-Verification (`test/runtests_neo_native.jl`): every intermediate array
-(basis, collision matrices, geometry, rotation), the assembled system
-(`A·g_fortran ≈ b`), the solution vector and all transport outputs are
-compared against Fortran NEO reference data generated by
-`test/neo_reference/generate.sh` (`utilities/serial_neo/neo_dump.f90`, a
-full-precision dump driver linked against your gacode `neo_lib.a`; the
-element-wise dumps are kept for the small CI cases and reg12, the other
-cases are checked on NEO's standard outputs). Two small Miller/rotation
-cases run in CI; `NEO_NATIVE_FULL=1` adds the gacode
-regression cases reg04/08/12/13/14/15 and a FUSE-built case in all four
-`(BTCCW, IPCCW)` sign conventions. Agreement is ~1e-8 in the fluxes, except
-where NEO's own double-precision recursion for the negative-index
-field-particle integrals is unstable (`0.1 <= (vth_a/vth_b)^2 <= 10`, high
-Legendre orders): there Fortran and Julia both carry amplified round-off
-and the fluxes agree to ~1e-6 (the same spread as between two Fortran
-builds). `solve_neo(p; fcoll_exact=true)` evaluates those integrals in
-extended precision instead.
+`run_neo(ineo)` writes `input.neo`, runs the GACODE NEO executable and returns a
+`GACODE.FluxSolution`; it is kept for cross-checks and is not differentiable. It needs
+GACODE installed locally: https://fuse.help/install.html#Install-GACODE (see the note after
+step 6 — on macOS you may need to replace `mpif90-openmpi-mp` with `mpif90-openmpi-gcc12`
+in `$GACODE_ROOT/platform/build/make.inc.OSX_MONTEREY` and `mpirun-openmpi-mp` with
+`mpirun-openmpi-gcc12` in `$GACODE_ROOT/platform/exec/exec.OSX_MONTEREY`). On login nodes
+where the `neo -e` wrapper cannot launch, source your GACODE environment and call
+`NeoclassicalTransport.use_serial_neo!()`, which builds a serial no-MPI NEO from
+`utilities/serial_neo/` and points `run_neo` at it.
 
 ## Online documentation
 For more details, see the [online documentation](https://projecttorreypines.github.io/NeoclassicalTransport.jl/dev).
