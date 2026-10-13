@@ -31,9 +31,19 @@ Options: `ineo.COLLISION_MODEL = 1..5`; `solve_neo(p; serial=true)` runs plain l
 Unsupported NEO features (`profile_model=2`, 3D, Spitzer, anisotropic species) raise an
 explicit error.
 
-A solve is dominated by the sparse factorization (~0.7 s for 5 species on the default
-grid, ~0.2 s for 3). When the same surfaces are solved repeatedly, keep caches to reuse
-the factorizations; a repeated 5-species point then costs ~0.05 s:
+A solve is dominated by the sparse factorization. Wall time per flux surface on one
+core of an AMD EPYC 7763 (Perlmutter CPU node), with the speed-up over the Fortran NEO
+executable in parentheses:
+
+| Case | Fortran NEO | Julia, cold | Julia, LU reused | Julia, inputs changed by 1 % |
+|---|---|---|---|---|
+| 3 species, 6426 unknowns | 0.645 s (1×) | 0.172 s (3.7×) | 0.043 s (15×) | 0.054 s (12×) |
+| 5 species, 10710 unknowns | 3.70 s (1×) | 0.636 s (5.8×) | 0.125 s (30×) | 0.163 s (23×) |
+
+"LU reused" is a repeated solve of the same matrix (e.g. the Dual passes of a forward-AD
+Jacobian); "inputs changed by 1 %" re-solves with the stale factorization as a GMRES
+preconditioner instead of refactorizing (e.g. successive flux-matcher iterations), and
+converges to the same tolerance. Both need caches that persist across calls:
 
 ```julia
 caches = [NeoclassicalTransport.NEOFactorCache(; refine=true) for _ in ineos]
