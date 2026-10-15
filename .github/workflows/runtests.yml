@@ -22,8 +22,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true # NEO-NN model BSONs in models/ are Git-LFS objects
 
       - uses: julia-actions/setup-julia@latest
 

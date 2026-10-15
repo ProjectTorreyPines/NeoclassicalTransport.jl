@@ -4,20 +4,45 @@ using IMAS
 import GACODE
 import ForwardDiff
 
+using Scratch
+
 include("input_neo.jl")
-
-include("neo/NEONative.jl")
-using .NEONative: NEONative, NEOParams, NEOSolution, NEOFactorCache, solve_neo, run_neo_native
-
-include("models.jl")
-
-include("neo_nn.jl")
 
 include("hirshman_sigmar.jl")
 
 include("chang_hinton.jl")
 
 include("FACIT.jl")
+
+function _pkg_root()
+    return normpath(joinpath(@__DIR__, ".."))
+end
+
+# Can we create files in `dir`? Probes with an actual write so it catches
+# read-only filesystems (EROFS, e.g. a container SIF) as well as plain
+# permission denials (EACCES, e.g. a shared site install).
+function _dir_writable(dir::AbstractString)
+    isdir(dir) || return false
+    probe = joinpath(dir, ".nct_write_probe_$(getpid())_$(rand(UInt32))")
+    try
+        touch(probe)
+        rm(probe; force=true)
+        return true
+    catch
+        return false
+    end
+end
+
+# Per-package-version scratch space, used to build the serial NEO binary when
+# the install itself is not writable.
+function _scratch_dir()
+    ver = try
+        string(pkgversion(@__MODULE__))
+    catch
+        "dev"
+    end
+    return Scratch.get_scratch!(@__MODULE__, "build-v$ver")
+end
 
 """
     build_serial_neo(; force=false) -> path
@@ -38,7 +63,7 @@ function build_serial_neo(; force::Bool=false)
     srcdir = joinpath(_pkg_root(), "utilities", "serial_neo")
     builddir = srcdir
     if !_dir_writable(srcdir)
-        builddir = joinpath(_model_cache_dir(), "serial_neo")
+        builddir = joinpath(_scratch_dir(), "serial_neo")
         mkpath(builddir)
         for f in ("neo_serial.f90", "Makefile")
             cp(joinpath(srcdir, f), joinpath(builddir, f); force=true)
