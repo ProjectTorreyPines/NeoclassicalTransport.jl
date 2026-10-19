@@ -224,8 +224,7 @@ end
 # replaced without a method-overwrite error during precompilation.)
 #
 # The type parameter exists so the plasma quantities can carry
-# `ForwardDiff.Dual`s: see [`InputNEO{T}(::InputNEO)`](@ref) and the AD-capable
-# `run_neonn` path. Integer fields (species charges, switches) stay `Int`
+# `ForwardDiff.Dual`s: see [`InputNEO{T}(::InputNEO)`](@ref). Integer fields (species charges, switches) stay `Int`
 # whatever `T` is — nothing is differentiated with respect to them.
 @eval function (::Type{InputNEO{T}})(; $(map(f -> Expr(:kw, f, :missing), fieldnames(InputNEO{Float64}))...)) where {T<:Real}
     return InputNEO{T}($(fieldnames(InputNEO{Float64})...))
@@ -246,7 +245,8 @@ Base.eltype(input_neo::InputNEO) = eltype(typeof(input_neo))
 
 Copy `other` with every real-valued field converted to `T` (`missing` stays
 `missing`, integer fields stay `Int`). This is how a differentiable evaluation
-starts from an already-populated input:
+starts from an already-populated input (`model` is any transport model that is
+generic in the `InputNEO` element type):
 
 ```julia
 ineo0 = InputNEO(eqt, cp1d, gridpoint)
@@ -254,7 +254,7 @@ function Qi(x::AbstractVector{D}) where {D<:Real}
     ineo = InputNEO{D}(ineo0)
     ineo.DLNTDR_1 = x[1]
     ineo.TEMP_1 = x[2]
-    return run_neonn(ineo; warn_nn_train_bounds=false).ENERGY_FLUX_i
+    return model(ineo).ENERGY_FLUX_i
 end
 ForwardDiff.gradient(Qi, [ineo0.DLNTDR_1, ineo0.TEMP_1])
 ```
