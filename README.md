@@ -4,7 +4,7 @@ Neoclassical transport for IMAS data (used by FUSE):
 
 - **Hirshman-Sigmar** and **Chang-Hinton** analytic models
 - **FACIT** impurity transport
-- `run_neo`: calls a locally installed Fortran NEO executable
+- `run_neo`: calls a locally installed Fortran NEO executable (see below)
 
 ## Analytic models
 
