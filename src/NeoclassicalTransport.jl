@@ -14,6 +14,8 @@ include("chang_hinton.jl")
 
 include("FACIT.jl")
 
+include("yancc.jl")
+
 function _pkg_root()
     return normpath(joinpath(@__DIR__, ".."))
 end

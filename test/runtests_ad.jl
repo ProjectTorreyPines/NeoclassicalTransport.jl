@@ -143,3 +143,55 @@ end
         println("∇Qi (FD): $grad_fd")
     end
 end
+
+
+@testset "Yancc AD" begin
+    NT = NeoclassicalTransport
+    rho_cp = cp1d.grid.rho_tor_norm
+    i = argmin(abs.(rho_cp .- 0.75))
+    geometry = NT.get_yancc_geometry(eqt, cp1d, [i]; ntheta=21)
+    field = geometry.fields[1]
+    rho_s = NT.GACODE.rho_s(cp1d, eqt)
+    rmin = NT.GACODE.r_min_core_profiles(eqt.profiles_1d, rho_cp)
+
+    # profiles of the element type of the arguments: the ion temperatures tilted by xT
+    # (value and gradient change), all densities scaled by xn
+    function profiles(xT::T, xn::T) where {T<:Real}
+        cp = IMAS.core_profiles__profiles_1d{T}()
+        cp.grid.rho_tor_norm = T.(rho_cp)
+        cp.electrons.temperature = T.(cp1d.electrons.temperature)
+        cp.electrons.density_thermal = xn .* cp1d.electrons.density_thermal
+        cp.electrons.density = xn .* cp1d.electrons.density
+        resize!(cp.ion, length(cp1d.ion))
+        for (k, ion) in enumerate(cp1d.ion)
+            resize!(cp.ion[k].element, 1)
+            cp.ion[k].element[1].a = T(ion.element[1].a)
+            cp.ion[k].element[1].z_n = T(ion.element[1].z_n)
+            cp.ion[k].temperature = ion.temperature .* (1 .+ (xT - 1) .* rho_cp)
+            cp.ion[k].density_thermal = xn .* ion.density_thermal
+            cp.ion[k].density = xn .* ion.density
+        end
+        return cp
+    end
+    fluxes(sol) = [sol.ENERGY_FLUX_e, sol.ENERGY_FLUX_i, sol.PARTICLE_FLUX_e, sol.PARTICLE_FLUX_i[1]]
+    solve(xT, xn; kw...) = fluxes(NT.yancc(i, eqt, profiles(xT, xn), field; geometry.a, rho_s, rmin, nx=4, nalpha=25, kw...))
+
+    # both derivatives from one call with two partials
+    cache = NT.YanccCache()
+    xT = ForwardDiff.Dual{Nothing}(1.0, 1.0, 0.0)
+    xn = ForwardDiff.Dual{Nothing}(1.0, 0.0, 1.0)
+    ad = solve(xT, xn; cache, rtol=1e-10, tangent_rtol=1e-9)
+    reference = solve(1.0, 1.0; rtol=1e-11)
+    @test ForwardDiff.value.(ad) ≈ reference rtol = 1e-7
+    h = 1e-4
+    for (k, (hT, hn)) in enumerate(((h, 0.0), (0.0, h)))
+        fd = (solve(1 + hT, 1 + hn; rtol=1e-11) .- solve(1 - hT, 1 - hn; rtol=1e-11)) ./ 2h
+        @test ForwardDiff.partials.(ad, k) ≈ fd rtol = 1e-4
+    end
+    println("d(Qe, Qi, Γe, Γi1)/d(xT): AD=$(ForwardDiff.partials.(ad, 1))")
+    # the second call at the same profiles reuses the derivative solves
+    solves = cache.tangent_solves
+    again = solve(xT, xn; cache, rtol=1e-10, tangent_rtol=1e-9)
+    @test ForwardDiff.partials.(again, 1) ≈ ForwardDiff.partials.(ad, 1) rtol = 1e-10
+    @test cache.tangent_solves == solves && solves <= 2 && cache.rebuilds == 1
+end
