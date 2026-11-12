@@ -12,7 +12,7 @@ Magnetic field of a Miller local equilibrium (R.L. Miller et al., Phys. Plasmas 
 (1998), with squareness as in NEO) as a `Yancc.Field` on `ntheta` points uniform in
 the Miller angle `θ`:
 
-    R = R0 + r cos(θ + asin(δ) sin θ),    Z = Z0 + κ r sin(θ + ζ sin 2θ)
+    R = R0 + r cos(θ + asin(δ) sin θ - ζ sin 2θ),    Z = Z0 + κ r sin θ
 
 Lengths in m, `Bunit = (q/r) dψ/dr` in T; the shears are those of NEO
 (`s_kappa = r/κ dκ/dr`, `s_delta = r dδ/dr`, `s_zeta = r dζ/dr`, `shift = dR0/dr`,
@@ -30,13 +30,12 @@ function miller_field(; r::Real, a::Real, R0::Real, kappa::Real, delta::Real, ze
     x = asin(delta)
     R, Jr, dl = zeros(ntheta), zeros(ntheta), zeros(ntheta)
     for (k, t) in enumerate(theta)
-        argr = t + x * sin(t)
-        argz = t + zeta * sin(2t)
-        R[k] = R0 + r * cos(argr)
-        R_r = shift + cos(argr) - sin(argr) * sin(t) * s_delta / cos(x)
-        R_t = -r * sin(argr) * (1 + x * cos(t))
-        Z_r = s_zmag + kappa * (1 + s_kappa) * sin(argz) + kappa * cos(argz) * s_zeta * sin(2t)
-        Z_t = kappa * r * cos(argz) * (1 + 2 * zeta * cos(2t))
+        arg = t + x * sin(t) - zeta * sin(2t)
+        R[k] = R0 + r * cos(arg)
+        R_r = shift + cos(arg) - sin(arg) * (s_delta / cos(x) * sin(t) - s_zeta * sin(2t))
+        R_t = -r * sin(arg) * (1 + x * cos(t) - 2 * zeta * cos(2t))
+        Z_r = s_zmag + kappa * (1 + s_kappa) * sin(t)
+        Z_t = kappa * r * cos(t)
         Jr[k] = R_r * Z_t - R_t * Z_r   # Jacobian of (r, θ) in the poloidal plane
         dl[k] = hypot(R_t, Z_t)
     end

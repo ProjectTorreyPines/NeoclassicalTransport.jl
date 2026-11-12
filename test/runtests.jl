@@ -63,8 +63,8 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test abs(field.iota) ≈ 1 / input_neo.Q
         species, lnlambda = NT.yancc_species(input_neo, cp1d.electrons.density[i], cp1d.electrons.temperature[i], geometry.a)
         @test lnlambda ≈ IMAS.lnΛ_ei(cp1d.electrons.density[i], cp1d.electrons.temperature[i]) rtol = 1e-3
-        solve(field; nx=6, nalpha=65) = Yancc.solve_dke_tokamak(Yancc.DKEOperator(field, Yancc.UniformPitchAngleGrid(nalpha),
-            Yancc.MaxwellSpeedGrid(nx), species, 0.0; p1="4z", lnlambda))
+        solve(field; nx=6, nalpha=65, rtol=1e-6) = Yancc.solve_dke_tokamak(Yancc.DKEOperator(field, Yancc.UniformPitchAngleGrid(nalpha),
+            Yancc.MaxwellSpeedGrid(nx), species, 0.0; p1="4z", lnlambda); rtol)
         raw = solve(field)
         sol = NT.yancc_to_GB(raw, 1:4, eqt, cp1d, i, geometry.a)
 
@@ -79,11 +79,11 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test abs(sum(Z[1:4] .* sol.PARTICLE_FLUX_i) - sol.PARTICLE_FLUX_e) < 0.15 * sum(abs, Z[1:4] .* sol.PARTICLE_FLUX_i)
 
         # fluxes do not depend on the directions of the field and of the current
-        coarse = solve(NT.get_yancc_geometry(eqt, cp1d, [i]; ntheta=21).fields[1]; nx=4, nalpha=25)
+        coarse = solve(NT.get_yancc_geometry(eqt, cp1d, [i]; ntheta=21).fields[1]; nx=4, nalpha=25, rtol=1e-9)
         Bunit = IMAS.interp1d(eqt.profiles_1d.rho_tor_norm, NT.GACODE.bunit(eqt.profiles_1d))(rho_cp[i])
         for (bt, ip) in ((1, 1), (1, -1), (-1, 1), (-1, -1))
             input_neo.BTCCW, input_neo.IPCCW = bt, ip
-            flipped = solve(NT.miller_field(input_neo, geometry.a, Bunit; ntheta=21); nx=4, nalpha=25)
+            flipped = solve(NT.miller_field(input_neo, geometry.a, Bunit; ntheta=21); nx=4, nalpha=25, rtol=1e-9)
             @test flipped.heat_flux ≈ coarse.heat_flux rtol = 1e-5
             @test flipped.particle_flux[end] ≈ coarse.particle_flux[end] rtol = 1e-5
             @test abs(flipped.JparB) ≈ abs(coarse.JparB) rtol = 1e-5
