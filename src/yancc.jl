@@ -60,10 +60,12 @@ end
     miller_field(input_neo::InputNEO, a, Bunit; ntheta=41)
 
 Field of the Miller surface described by `input_neo`, with `a` [m] the minor radius
-that normalizes its lengths and `Bunit` [T].
+that normalizes its lengths and `Bunit` [T]. The surface is built from the values of
+`ForwardDiff.Dual` inputs: it carries no derivatives.
 """
 function miller_field(input_neo::InputNEO, a::Real, Bunit::Real; ntheta::Integer=41)
-    val(x) = ismissing(x) ? 0.0 : Float64(x)
+    val(x) = ismissing(x) ? 0.0 : Float64(ForwardDiff.value(x))
+    a, Bunit = val(a), val(Bunit)
     return miller_field(; r=val(input_neo.RMIN_OVER_A) * a, a, R0=val(input_neo.RMAJ_OVER_A) * a,
         kappa=val(input_neo.KAPPA), delta=val(input_neo.DELTA), zeta=val(input_neo.ZETA), shift=val(input_neo.SHIFT),
         s_kappa=val(input_neo.S_KAPPA), s_delta=val(input_neo.S_DELTA), s_zeta=val(input_neo.S_ZETA),
@@ -96,7 +98,7 @@ function get_yancc_geometry(eqt::IMAS.equilibrium__time_slice, cp1d::IMAS.core_p
     a = GACODE.r_min_core_profiles(eqt1d, rho_cp)[end] / IMAS.cgs.m_to_cm
     bunit = IMAS.interp1d(eqt1d.rho_tor_norm, GACODE.bunit(eqt1d))
     fields = [miller_field(InputNEO(eqt, cp1d, i), a, bunit(rho_cp[i]); ntheta) for i in gridpoints_cp]
-    return YanccGeometry(eqt.time, collect(Int, gridpoints_cp), fields, a)
+    return YanccGeometry(eqt.time, collect(Int, gridpoints_cp), fields, Float64(ForwardDiff.value(a)))
 end
 
 """

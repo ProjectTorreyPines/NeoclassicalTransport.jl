@@ -194,4 +194,11 @@ end
     again = solve(xT, xn; cache, rtol=1e-10, tangent_rtol=1e-9)
     @test ForwardDiff.partials.(again, 1) ≈ ForwardDiff.partials.(ad, 1) rtol = 1e-10
     @test cache.tangent_solves == solves && solves <= 2 && cache.rebuilds == 1
+
+    # an equilibrium of dual numbers gives the flux surface of its values
+    D = ForwardDiff.Dual{Nothing,Float64,1}
+    dd_dual = IMAS.retype(D, dd)
+    geometry_dual = NT.get_yancc_geometry(dd_dual.equilibrium.time_slice[], dd_dual.core_profiles.profiles_1d[], [i]; ntheta=21)
+    @test geometry_dual.a == geometry.a
+    @test all(getfield(geometry_dual.fields[1], name) == getfield(field, name) for name in fieldnames(typeof(field)))
 end
