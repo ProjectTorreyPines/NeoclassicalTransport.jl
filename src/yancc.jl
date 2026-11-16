@@ -136,7 +136,7 @@ end
 
 """
     yancc(gridpoint_cp, eqt, cp1d, field; a, nx=6, nalpha=65, p1="4z", rtol=1e-8, tangent_rtol=1e-6,
-          lnlambda=nothing, cache=nothing, rho_s, rmin)
+          max_residual=1e-3, lnlambda=nothing, cache=nothing, rho_s, rmin)
 
 Neoclassical fluxes at one `cp1d` grid point from the drift kinetic equation with the
 linearized Fokker-Planck collision operator, solved by Yancc.jl on the flux surface
@@ -157,6 +157,11 @@ changes of the profiles (below 1e-5, as in a finite difference Jacobian) are com
 as a correction to the last full solve and vary smoothly; without one they are smooth
 only down to about `rtol`.
 
+The solve can stop far above `rtol` where the kinetic equation is ill conditioned, as for
+the temperatures of a few eV or of many MeV that a transport solver may try on its way.
+Fluxes of such a solution are meaningless: a relative residual above `max_residual` is an
+error, which a transport solver can take as a rejected step.
+
 Profiles of `ForwardDiff.Dual` numbers give fluxes with their derivatives: the kinetic
 equation is solved in plain numbers and each direction of differentiation by one more
 linear solve to `tangent_rtol`, which a `cache` reuses between calls at the same profiles
@@ -176,6 +181,7 @@ function yancc(
     p1::AbstractString="4z",
     rtol::Real=1e-8,
     tangent_rtol::Real=1e-6,
+    max_residual::Real=1e-3,
     lnlambda::Union{Nothing,Real}=nothing,
     cache::Union{Nothing,Yancc.TokamakCache}=nothing,
     rho_s::AbstractVector{<:Real}=GACODE.rho_s(cp1d, eqt),
@@ -184,6 +190,10 @@ function yancc(
     species, kept = yancc_species(cp1d, rmin ./ (a * IMAS.cgs.m_to_cm), gridpoint_cp)
     op = Yancc.DKEOperator(field, Yancc.UniformPitchAngleGrid(nalpha), Yancc.MaxwellSpeedGrid(nx), species, 0.0; p1, lnlambda)
     sol = cache === nothing ? Yancc.solve_dke_tokamak(op; rtol, tangent_rtol) : Yancc.solve_dke_tokamak!(cache, op; rtol, tangent_rtol)
+    if !(sol.residual <= max_residual)
+        error("yancc: the drift kinetic solve stopped at the relative residual $(sol.residual) (max_residual = $max_residual) " *
+              "at grid point $gridpoint_cp, the equation is ill conditioned for these plasma parameters")
+    end
     return yancc_to_GB(sol, kept, eqt, cp1d, gridpoint_cp, a; rho_s)
 end
 

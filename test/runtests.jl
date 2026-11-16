@@ -99,6 +99,8 @@ cp1d = dd.core_profiles.profiles_1d[];
         again = NT.yancc(i, eqt, cp1d, field; geometry.a, cache)
         @test again.ENERGY_FLUX_i == sol.ENERGY_FLUX_i
         @test cache.iterations == iterations && cache.rebuilds == 1 && cache.solves == 2
+        # a solve that stops above `max_residual` is an error, not fluxes
+        @test_throws ErrorException NT.yancc(i, eqt, cp1d, field; geometry.a, max_residual=0.0)
 
         # the species from the profiles are those of InputNEO: total densities (thermal + fast),
         # every ion at its own temperature
