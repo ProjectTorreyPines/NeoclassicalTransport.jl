@@ -28,11 +28,11 @@ function miller_field(; r::Real, a::Real, R0::Real, kappa::Real, delta::Real, ze
 
     theta = range(0, 2π; length=ntheta + 1)[1:ntheta]
     x = asin(delta)
-    R, Jr, dl = zeros(ntheta), zeros(ntheta), zeros(ntheta)
+    R, Rr, Jr, dl = zeros(ntheta), zeros(ntheta), zeros(ntheta), zeros(ntheta)
     for (k, t) in enumerate(theta)
         arg = t + x * sin(t) - zeta * sin(2t)
         R[k] = R0 + r * cos(arg)
-        R_r = shift + cos(arg) - sin(arg) * (s_delta / cos(x) * sin(t) - s_zeta * sin(2t))
+        R_r = Rr[k] = shift + cos(arg) - sin(arg) * (s_delta / cos(x) * sin(t) - s_zeta * sin(2t))
         R_t = -r * sin(arg) * (1 + x * cos(t) - 2 * zeta * cos(2t))
         Z_r = s_zmag + kappa * (1 + s_kappa) * sin(t)
         Z_t = kappa * r * cos(t)
@@ -52,9 +52,14 @@ function miller_field(; r::Real, a::Real, R0::Real, kappa::Real, delta::Real, ze
     # current along +φ, and the Jacobian is negative.
     st, sz = -sign(ipccw), sign(btccw)
     col(v) = reshape(collect(float.(v)), ntheta, 1)
+    # the major radius of the nodes, which a Yancc with toroidal rotation takes
+    major_radius = yancc_has_rotation() ? (; R=col(R), dRdrho=col(a .* Rr)) : (;)
     return Yancc.Field(r / a, col(st .* Bp ./ dl), col(sz .* F ./ R .^ 2), col(st .* Bp .* dl), col(sz .* F .+ 0 .* R),
-        col(Bmag), col(-a .* R .* Jr); R_major=R0, a_minor=a, iota=st * sz / abs(q))
+        col(Bmag), col(-a .* R .* Jr); R_major=R0, a_minor=a, iota=st * sz / abs(q), major_radius...)
 end
+
+"Whether the installed Yancc.jl solves for plasmas with sonic toroidal rotation (`Yancc.Rotation`)."
+yancc_has_rotation() = isdefined(Yancc, :Rotation)
 
 """
     miller_field(input_neo::InputNEO, a, Bunit; ntheta=41)
@@ -227,7 +232,7 @@ const YanccCache = Yancc.TokamakCache
 Maxwellians of the species of `input_neo`, in its order, for the electron density `ne`
 [m⁻³], temperature `Te` [eV] and minor radius `a` [m] that normalize it, and the
 Coulomb logarithm implied by its `NU_1`. With [`miller_field`](@ref) this poses to Yancc the problem that
-`input_neo` poses to NEO (without rotation).
+`input_neo` poses to NEO without rotation; [`yancc_operator`](@ref) includes the rotation.
 """
 function yancc_species(input_neo::InputNEO, ne::Real, Te::Real, a::Real)
     get(name, k) = Float64(getfield(input_neo, Symbol(name, "_", k)))
@@ -244,4 +249,136 @@ function yancc_species(input_neo::InputNEO, ne::Real, Te::Real, a::Real)
     nu1 = sqrt(2) * π * s1.density * (s1.species.charge / Yancc.ELEMENTARY_CHARGE)^4 * e2^2 / (sqrt(s1.species.mass) * T1^1.5)
     lnlambda = Float64(input_neo.NU_1) * sqrt(Te * Yancc.ELEMENTARY_CHARGE / md) / a / nu1
     return species, lnlambda
+end
+
+"""
+    yancc_rotation(input_neo::InputNEO, T_norm, a)
+
+Toroidal rotation of `input_neo` as a `Yancc.Rotation`, for the temperature `T_norm` [eV]
+and the minor radius `a` [m] that normalize it: the angular velocity
+`OMEGA_ROT √(T_norm/m_D)/a` along the `+ζ` of [`miller_field`](@ref) and its derivative in
+`ρ = r/a`, `OMEGA_ROT_DERIV √(T_norm/m_D)/a`. The densities and their gradients are those at
+the outboard midplane, as in NEO with `ROTATION_MODEL = 2`.
+
+The fluxes of particles and energy depend only on the sign of `OMEGA_ROT OMEGA_ROT_DERIV`,
+those of momentum and the flows also on that of `OMEGA_ROT`.
+"""
+function yancc_rotation(input_neo::InputNEO, T_norm::Real, a::Real)
+    yancc_has_rotation() || error("yancc_rotation: the installed Yancc.jl has no toroidal rotation (Yancc.Rotation)")
+    md = IMAS.cgs.md / 1e3   # kg
+    rate = sqrt(Float64(T_norm) * Yancc.ELEMENTARY_CHARGE / md) / Float64(a)
+    val(x) = ismissing(x) ? 0.0 : Float64(ForwardDiff.value(x))
+    return Yancc.Rotation(val(input_neo.OMEGA_ROT) * rate, val(input_neo.OMEGA_ROT_DERIV) * rate)
+end
+
+"""
+    yancc_operator(input_neo::InputNEO, n_norm, T_norm, a; rotation=true, ntheta=41, nalpha=65, nx=10, p1="4z")
+
+`Yancc.DKEOperator` of the local problem that `input_neo` poses to NEO, for the density
+`n_norm` [m⁻³], the temperature `T_norm` [eV] and the minor radius `a` [m] that normalize it
+(for an `InputNEO` from IMAS data those of the electrons): the Miller surface, with
+`Bunit` from `RHO_STAR`, the species, the Coulomb logarithm from `NU_1` and, with
+`rotation`, the toroidal rotation of `ROTATION_MODEL = 2` ([`yancc_rotation`](@ref)).
+There is no radial electric field besides that of the rotation (`DPHI0DR = 0`).
+
+The solution depends on the normalizing values only through the dimensionless inputs: any
+`n_norm`, `T_norm` and `a` give the same [`yancc_neo_outputs`](@ref).
+"""
+function yancc_operator(input_neo::InputNEO, n_norm::Real, T_norm::Real, a::Real; rotation::Bool=true, ntheta::Integer=41,
+    nalpha::Integer=65, nx::Integer=10, p1::AbstractString="4z")
+    md = IMAS.cgs.md / 1e3   # kg
+    vnorm = sqrt(Float64(T_norm) * Yancc.ELEMENTARY_CHARGE / md)
+    Bunit = md * vnorm / (Yancc.ELEMENTARY_CHARGE * a * Float64(input_neo.RHO_STAR))
+    field = miller_field(input_neo, a, Bunit; ntheta)
+    species, lnlambda = yancc_species(input_neo, n_norm, T_norm, a)
+    rotation || return Yancc.DKEOperator(field, Yancc.UniformPitchAngleGrid(nalpha), Yancc.MaxwellSpeedGrid(nx), species, 0.0; p1, lnlambda)
+    return Yancc.DKEOperator(field, Yancc.UniformPitchAngleGrid(nalpha), Yancc.MaxwellSpeedGrid(nx), species, 0.0; p1, lnlambda,
+        rotation=yancc_rotation(input_neo, T_norm, a))
+end
+
+"""
+    yancc_neo_outputs(op, sol, input_neo::InputNEO, n_norm, T_norm, a)
+
+Results of the Yancc solution `sol` of `op = yancc_operator(input_neo, n_norm, T_norm, a)` in
+the conventions and units of NEO's output, one value for each species of `input_neo`
+unless noted:
+
+  - `pflux_dke`, `eflux_dke`, `mflux_dke`: fluxes of particles, energy and toroidal angular
+    momentum of the drift kinetic solution, as in `out.neo.transport_flux`: in the gyro-Bohm
+    units `n_e c_s (ρ_s/a)²`, `n_e c_s T_e (ρ_s/a)²` and `n_e a T_e (ρ_s/a)²` of the electrons
+    of `input_neo`, `c_s = √(T_e/m_D)` and `ρ_s` in `Bunit`. The energy flux is that of the laboratory frame.
+  - `pflux_gv`, `eflux_gv`, `mflux_gv`: the fluxes that do not come from collisions
+    (gyroviscous), zero for an up-down symmetric surface and without rotation.
+  - `pflux_tgyro`, `eflux_tgyro`, `mflux_tgyro`: their sums, with the energy flux of the
+    rotating frame (that of the laboratory frame less `ω` times the momentum flux).
+  - `uparB`: `⟨u∥ B⟩ / (v_norm Bunit)`, `v_norm = √(T_norm/m_D)`.
+  - `vpol`: poloidal flow at the outboard midplane over `v_norm`, positive along the Miller
+    angle `θ`.
+  - `jpar` (one number): `⟨j∥ B⟩ / (e n_norm v_norm Bunit)`.
+
+Flows and current are of first order in `ρ_s/a`, with the value of `RHO_STAR`, as in
+`out.neo.transport`.
+
+Checked against Fortran NEO (`ROTATION_MODEL = 2`, collision model 4) for a counter-clockwise
+current and a clockwise toroidal field, on up-down symmetric surfaces; the gyroviscous
+fluxes are not.
+"""
+function yancc_neo_outputs(op::Yancc.DKEOperator, sol::Yancc.DKESolution, input_neo::InputNEO, n_norm::Real, T_norm::Real, a::Real)
+    e = Yancc.ELEMENTARY_CHARGE
+    md = IMAS.cgs.md / 1e3   # kg
+    get(name, k) = Float64(getfield(input_neo, Symbol(name, "_", k)))
+    ns = input_neo.N_SPECIES
+    n_norm, T_norm, a = Float64(n_norm), Float64(T_norm), Float64(a)
+    vnorm = sqrt(T_norm * e / md)
+    rho_star = Float64(input_neo.RHO_STAR)
+    Bunit = md * vnorm / (e * a * rho_star)
+
+    # gyro-Bohm units of the electrons; Yancc's fluxes are per unit ρ = r/a
+    ie = findfirst(k -> get("Z", k) < 0, 1:ns)
+    ie === nothing && error("yancc_neo_outputs: input_neo has no electrons to define the gyro-Bohm units")
+    ne, Te = get("DENS", ie), get("TEMP", ie)
+    Γ_GB = n_norm * vnorm * rho_star^2 / a * ne * Te^1.5
+    Q_GB = Γ_GB * T_norm * e * Te
+    Π_GB = n_norm * T_norm * e * rho_star^2 * ne * Te^2   # n_e a T_e (ρ_s/a)², per unit ρ
+
+    rotating = yancc_has_rotation() && op.rotation !== nothing
+    G, Q, P = sol.particle_flux, sol.heat_flux, rotating ? sol.angular_momentum_flux : zero(sol.heat_flux)
+    if rotating
+        H = Yancc.nondissipative_fluxes(op)
+        lab(G, Q, P) = Yancc.energy_flux(op, G, Q, P; frame=:laboratory)
+        rot(G, Q, P) = Yancc.energy_flux(op, G, Q, P; frame=:rotating)
+        GH, PH = H.particle_flux, H.angular_momentum_flux
+        E, EH = lab(G, Q, P), lab(GH, H.heat_flux, PH)
+        Er = rot(G, Q, P) .+ rot(GH, H.heat_flux, PH)
+        omega = op.rotation.omega
+    else
+        GH, PH, EH = zero(G), zero(P), zero(Q)
+        E, Er = Q, Q
+        omega = 0.0
+    end
+
+    # Poloidal flow at θ = 0 (the first node): the flow is K B/n + ω₁ R ζ̂ with the rotation
+    # ω₁ = -(dp/dψ - n m ω² R ∂R/∂ψ)/(Z e n) of the force balance there, so the parallel flow
+    # gives K B/n = V∥ - ω₁ R B_ζ/B, whose poloidal part is along B_p. ψ grows outwards for a
+    # counter-clockwise current and B_p is then along -θ.
+    fd = op.field
+    ipccw = ismissing(input_neo.IPCCW) ? 1.0 : Float64(sign(input_neo.IPCCW))
+    r = Float64(input_neo.RMIN_OVER_A) * a
+    R1 = Float64(input_neo.RMAJ_OVER_A) * a + r
+    dR1dr = 1 + (ismissing(input_neo.SHIFT) ? 0.0 : Float64(input_neo.SHIFT))
+    B1 = fd.Bmag[1, 1]
+    Bp1 = sqrt(max(B1^2 - (fd.G / R1)^2, 0.0))
+    dpsidr = r * Bunit / abs(Float64(input_neo.Q))
+    vpol = map(1:ns) do k
+        T, Z, m = get("TEMP", k) * T_norm, get("Z", k), get("MASS", k) * md
+        force = -T * (get("DLNNDR", k) + get("DLNTDR", k)) / a - (m / e) * omega^2 * R1 * dR1dr   # per particle [eV/m]
+        w1 = force / (Z * dpsidr)   # -ω₁ for a counter-clockwise current
+        (-ipccw * sol.Vpar[1, 1, k] - w1 * fd.G / B1) * Bp1 / B1 / vnorm
+    end
+
+    return (;
+        pflux_dke=G ./ Γ_GB, eflux_dke=E ./ Q_GB, mflux_dke=P ./ Π_GB,
+        pflux_gv=GH ./ Γ_GB, eflux_gv=EH ./ Q_GB, mflux_gv=PH ./ Π_GB,
+        pflux_tgyro=(G .+ GH) ./ Γ_GB, eflux_tgyro=Er ./ Q_GB, mflux_tgyro=(P .+ PH) ./ Π_GB,
+        uparB=sol.VparB ./ (vnorm * Bunit), vpol, jpar=sol.JparB / (e * n_norm * vnorm * Bunit))
 end

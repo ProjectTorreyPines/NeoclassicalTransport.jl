@@ -133,6 +133,74 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test m1d.electrons.energy.flux[1] ≈ geometry.a * raw.heat_flux[end] * vprime rtol = 1e-10
         @test m1d.total_ion_energy.flux[1] ≈ geometry.a * sum(raw.heat_flux[1:end-1]) * vprime rtol = 1e-10
         @test m1d.electrons.particles.flux[1] ≈ geometry.a * raw.particle_flux[end] * vprime rtol = 1e-10
+
+        # the same case in the conventions of NEO's output: with the electrons normalizing the
+        # input, the gyro-Bohm fluxes are those of `yancc_to_GB`
+        input_neo = NT.InputNEO(eqt, cp1d, i)
+        ne, Te = cp1d.electrons.density[i], cp1d.electrons.temperature[i]
+        op = NT.yancc_operator(input_neo, ne, Te, geometry.a; rotation=false, nx=6)
+        raw = Yancc.solve_dke_tokamak(op; rtol=1e-6)
+        out = NT.yancc_neo_outputs(op, raw, input_neo, ne, Te, geometry.a)
+        ref = NT.yancc_to_GB(raw, 1:4, eqt, cp1d, i, geometry.a)
+        @test out.eflux_tgyro[end] ≈ ref.ENERGY_FLUX_e rtol = 2e-3   # a and ρ_s of InputNEO and of GACODE
+        @test sum(out.eflux_tgyro[1:end-1]) ≈ ref.ENERGY_FLUX_i rtol = 2e-3
+        @test out.pflux_tgyro[end] ≈ ref.PARTICLE_FLUX_e rtol = 2e-3
+        @test out.eflux_dke == out.eflux_tgyro && all(iszero, out.pflux_gv) && all(iszero, out.mflux_dke)
+        # they do not depend on the values that normalize the input
+        op2 = NT.yancc_operator(input_neo, 3e19, 700.0, 0.6; rotation=false, nx=6)
+        out2 = NT.yancc_neo_outputs(op2, Yancc.solve_dke_tokamak(op2; rtol=1e-6), input_neo, 3e19, 700.0, 0.6)
+        for name in (:pflux_tgyro, :eflux_tgyro, :uparB, :vpol)
+            @test getfield(out2, name) ≈ getfield(out, name) rtol = 1e-4
+        end
+        @test out2.jpar ≈ out.jpar rtol = 1e-4
+    end
+
+    # needs a Yancc.jl with toroidal rotation
+    NeoclassicalTransport.yancc_has_rotation() && @testset "yancc.jl with sonic rotation" begin
+        NT = NeoclassicalTransport
+        Yancc = NT.Yancc
+        # a spherical tokamak surface at r/a = 0.3, Mach number 0.5 at the outboard midplane,
+        # normalized to the main ion as in a NEO input file
+        input_neo = NT.InputNEO(; N_SPECIES=3, IPCCW=1, BTCCW=-1, ROTATION_MODEL=2,
+            RMIN_OVER_A=0.3, RMAJ_OVER_A=1.7536662411465478, RHO_STAR=7.5578865445764644e-3, SHIFT=-0.15070487035015717,
+            S_ZMAG=0.0, Q=2.4209627337754567, SHEAR=0.11331244035462903, KAPPA=2.5811717959967213, S_KAPPA=1.6289195249156868e-2,
+            DELTA=0.12702113731164183, S_DELTA=9.5310575457983993e-2, ZETA=-1.2833695904231810e-2, S_ZETA=0.0,
+            OMEGA_ROT=-0.23941167743090741, OMEGA_ROT_DERIV=8.8488439698855101e-2, NU_1=5.3152002561413416e-3,
+            Z_1=1, MASS_1=1.00026045, DENS_1=1.0, TEMP_1=1.0, DLNNDR_1=2.2483299820280460, DLNTDR_1=0.43181336523337882,
+            Z_2=6, MASS_2=5.9650047842589409, DENS_2=0.10288811961885454, TEMP_2=1.0010177587237705,
+            DLNNDR_2=-0.48314066249864296, DLNTDR_2=0.46765248541359755,
+            Z_3=-1, MASS_3=2.72308510742333e-4, DENS_3=1.6173287177131272, TEMP_3=0.83007795899279391,
+            DLNNDR_3=1.2057373145816577, DLNTDR_3=1.6013811000907354)
+        n_norm, T_norm, a = 1e19, 1e3, 1.0
+        rotation = NT.yancc_rotation(input_neo, T_norm, a)
+        @test rotation.omega ≈ -0.23941167743090741 * sqrt(1e3 * Yancc.ELEMENTARY_CHARGE / (IMAS.cgs.md / 1e3)) rtol = 1e-12
+        @test rotation.domega_drho / rotation.omega ≈ 8.8488439698855101e-2 / -0.23941167743090741 rtol = 1e-12
+        op = NT.yancc_operator(input_neo, n_norm, T_norm, a; nx=8)
+        @test op.rotation !== nothing
+        sol = Yancc.solve_dke_tokamak(op; rtol=1e-8)
+        out = NT.yancc_neo_outputs(op, sol, input_neo, n_norm, T_norm, a)
+
+        # Fortran NEO, ROTATION_MODEL=2, COLLISION_MODEL=4 at N_ENERGY=12, N_XI=35, N_THETA=35
+        # (within 0.5% of its fluxes at 12, 19, 19)
+        @test out.pflux_tgyro ≈ [0.63741, -0.097443, 0.052754] rtol = 0.02
+        @test out.eflux_tgyro ≈ [1.6981, -0.17850, 0.14579] rtol = 0.02
+        @test out.eflux_dke ≈ [1.8944, -0.35923, 0.14579] rtol = 0.02
+        @test out.mflux_tgyro[1:2] ≈ [-0.74701, 0.68775] rtol = 0.02
+        @test out.mflux_tgyro[3] ≈ -0.14060e-4 rtol = 0.05
+        @test out.uparB ≈ [-0.079794848, -0.066067769, -0.014306856] rtol = 0.02
+        @test out.vpol ≈ [-0.014156700, 0.027618043, 0.049470210] rtol = 0.03
+        @test out.jpar ≈ -0.095451423 rtol = 0.02
+        # the fluxes are ambipolar and nothing is gyroviscous on this up-down symmetric surface
+        Z = [1, 6, -1]
+        @test abs(sum(Z .* out.pflux_tgyro)) < 1e-2 * sum(abs, Z .* out.pflux_tgyro)
+        @test maximum(abs, out.pflux_gv) < 1e-8 && maximum(abs, out.mflux_gv) < 1e-8
+
+        # without the rotation the momentum flux vanishes and the energy fluxes of the two frames agree
+        op0 = NT.yancc_operator(input_neo, n_norm, T_norm, a; rotation=false, nx=8)
+        out0 = NT.yancc_neo_outputs(op0, Yancc.solve_dke_tokamak(op0; rtol=1e-8), input_neo, n_norm, T_norm, a)
+        @test out0.eflux_dke == out0.eflux_tgyro
+        @test !isapprox(out0.eflux_tgyro[1], out.eflux_tgyro[1]; rtol=0.05)
+
     end
 end
 
