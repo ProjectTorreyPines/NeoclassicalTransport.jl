@@ -20,6 +20,8 @@ function _pkg_root()
     return normpath(joinpath(@__DIR__, ".."))
 end
 
+include("yancc_nn.jl")
+
 # Can we create files in `dir`? Probes with an actual write so it catches
 # read-only filesystems (EROFS, e.g. a container SIF) as well as plain
 # permission denials (EACCES, e.g. a shared site install).

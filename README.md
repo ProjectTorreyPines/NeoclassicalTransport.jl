@@ -6,6 +6,7 @@ Neoclassical transport for IMAS data (used by FUSE):
 - **FACIT** impurity transport
 - **yancc**: drift kinetic solver with the linearized Fokker-Planck collision operator, through
   [Yancc.jl](https://github.com/ProjectTorreyPines/Yancc.jl) (see below)
+- **Yancc-NN**: neural-network surrogates of the drift kinetic solver with sonic rotation (see below)
 - `run_neo`: calls a locally installed Fortran NEO executable (see below)
 
 ## Analytic models
@@ -42,6 +43,30 @@ If you use this model, please cite R. Conlin and M. Landreman, "yancc: a GPU-acc
 differentiable solver for neoclassical transport in tokamaks and stellarators",
 *Plasma Phys. Control. Fusion* **68**, 115001 (2026),
 [doi:10.1088/1361-6587/aeb628](https://doi.org/10.1088/1361-6587/aeb628).
+
+## Neural-network surrogates of the drift kinetic solver (`run_yanccnn`)
+
+```julia
+input_neo = NeoclassicalTransport.InputNEO(eqt, cp1d, gridpoint)
+sol  = NeoclassicalTransport.run_yanccnn(input_neo)        # GACODE.FluxSolution, gyro-Bohm units
+flow = NeoclassicalTransport.run_yanccnn_flow(input_neo)   # poloidal flows and parallel current
+sol  = NeoclassicalTransport.run_yanccnn(input_neo; uncertain=true)   # Measurements: mean ± spread over the ensemble
+```
+
+The models are ensembles of 20 networks trained on drift kinetic solutions with sonic toroidal
+rotation for MAST-U and NSTX core plasmas (r/a from 0.1 to 0.9, deuterium with carbon, 65 pitch,
+41 poloidal and 10 energy points). The plasma is reduced to a bulk ion, one lumped impurity and
+electrons (`yanccnn_inputs`), and a warning is given when an input is outside the range of the
+training set. On data held out of the training, the median relative error of the ensemble mean is
+0.2 to 0.4 % for the fluxes and below 0.1 % for the flows. The forward pass is differentiable with
+ForwardDiff. `yanccnn_models()` lists the models.
+
+The weights (`models/*.bin`) are stored with Git LFS. In a git checkout `git lfs pull` fetches them;
+in a package installation they are downloaded on first use.
+
+`python utilities/yanccnn_to_onnx.py models/<name> [outdir] --check` converts a model to ONNX: one graph
+for the whole ensemble (plain inputs to mean and standard deviation) and one for each member, with
+the normalisation in text files (needs `numpy` and `onnx`; `onnxruntime` for `--check`).
 
 ## Fortran NEO (`run_neo`)
 

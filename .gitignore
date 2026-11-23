@@ -37,3 +37,5 @@ test.json
 asd.jl
 # site-built serial NEO binary (build with utilities/serial_neo/Makefile)
 utilities/serial_neo/neo_serial
+# ONNX files written by utilities/yanccnn_to_onnx.py
+models/yanccnn_*/

@@ -1,6 +1,7 @@
 using NeoclassicalTransport
 using NeoclassicalTransport.IMAS
 using ForwardDiff
+using TOML
 using Test
 
 dd = IMAS.json2imas(joinpath(@__DIR__, "highbetap_fpp_325_ods.json"))
@@ -133,6 +134,61 @@ cp1d = dd.core_profiles.profiles_1d[];
         @test m1d.electrons.energy.flux[1] ≈ geometry.a * raw.heat_flux[end] * vprime rtol = 1e-10
         @test m1d.total_ion_energy.flux[1] ≈ geometry.a * sum(raw.heat_flux[1:end-1]) * vprime rtol = 1e-10
         @test m1d.electrons.particles.flux[1] ≈ geometry.a * raw.particle_flux[end] * vprime rtol = 1e-10
+    end
+    @testset "yancc_nn.jl" begin
+        NT = NeoclassicalTransport
+        @test NT.yanccnn_models() == ["yanccnn_mastu+nstx_flow", "yanccnn_mastu+nstx_flux"]
+        for group in ("flux", "flow")
+            ens = NT.load_yanccnn_once("yanccnn_mastu+nstx_$group")
+            @test length(ens.members) == 20
+            # predictions of the training code on hold-out points of the training set
+            ref = TOML.parsefile(joinpath(@__DIR__, "yanccnn_reference_$group.toml"))
+            for (x, y) in zip(ref["x"], ref["y"])
+                out = NT.yanccnn_array(ens, Float64.(x))
+                mean_out = vec(sum(out; dims=2)) ./ size(out, 2)
+                @test all(abs.(mean_out .- y) .<= 1e-3 .* abs.(y) .+ 1e-5 .* ens.ysigma)
+            end
+            # derivatives through the forward pass
+            x = Float64.(ref["x"][1])
+            f(v) = sum(NT.yanccnn_array(ens, v; warn_nn_train_bounds=false))
+            g = ForwardDiff.gradient(f, x)
+            k = findfirst(==("DLNTDR_1"), ens.xnames)
+            h = 1e-5
+            xp, xm = copy(x), copy(x)
+            xp[k] += h
+            xm[k] -= h
+            @test all(isfinite, g)
+            @test g[k] ≈ (f(xp) - f(xm)) / 2h rtol = 1e-5
+        end
+
+        # from IMAS data (a reactor case, outside the training set: only the plumbing is tested)
+        i = argmin(abs.(cp1d.grid.rho_tor_norm .- 0.5))
+        input_neo = NT.InputNEO(eqt, cp1d, i)
+        inputs = NT.yanccnn_inputs(input_neo)
+        @test inputs.DENS_3 > 1 && inputs.Q < 0 && inputs.NU_1 > 0
+        sol = NT.run_yanccnn(input_neo; warn_nn_train_bounds=false)
+        @test sol isa NT.GACODE.FluxSolution{Float64}
+        @test isfinite(sol.ENERGY_FLUX_i) && isfinite(sol.ENERGY_FLUX_e) && length(sol.PARTICLE_FLUX_i) == 2
+        usol = NT.run_yanccnn(input_neo; uncertain=true, warn_nn_train_bounds=false)
+        @test usol.ENERGY_FLUX_i isa NT.Measurements.Measurement
+        @test NT.Measurements.value(usol.ENERGY_FLUX_i) ≈ sol.ENERGY_FLUX_i && NT.Measurements.uncertainty(usol.ENERGY_FLUX_i) >= 0
+        @test NT.run_yanccnn([input_neo, input_neo]; warn_nn_train_bounds=false)[2].ENERGY_FLUX_i == sol.ENERGY_FLUX_i
+        flow = NT.run_yanccnn_flow(input_neo; warn_nn_train_bounds=false)
+        uflow = NT.run_yanccnn_flow(input_neo; uncertain=true, warn_nn_train_bounds=false)
+        @test isfinite(flow.jpar) && isfinite(flow.vpol_ion1) && NT.Measurements.value(uflow.jpar) ≈ flow.jpar
+        @test_throws ErrorException NT.run_yanccnn(input_neo; model="yanccnn_mastu+nstx_flow", warn_nn_train_bounds=false)
+
+        # weights stored with Git LFS: pointers are recognised, ordinary files are used as they are
+        mktempdir() do dir
+            pointer = joinpath(dir, "weights.bin")
+            write(pointer, "version https://git-lfs.github.com/spec/v1\noid sha256:$(repeat("0", 64))\nsize 42\n")
+            @test NT.is_lfs_pointer(pointer)
+            @test NT._lfs_pointer_info(pointer) == (oid=repeat("0", 64), size=42)
+            plain = joinpath(dir, "plain.bin")
+            write(plain, zeros(Float32, 8))
+            @test !NT.is_lfs_pointer(plain)
+            @test NT.ensure_model_file!(plain) == plain
+        end
     end
 end
 
