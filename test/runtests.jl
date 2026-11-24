@@ -158,6 +158,34 @@ cp1d = dd.core_profiles.profiles_1d[];
             xp[k] += h
             xm[k] -= h
             @test all(isfinite, g)
+            # dual numbers go through a Jacobian in plain numbers, kept for the last points: same
+            # derivatives as dual numbers carried through every layer, with any chunk size, from
+            # several threads, and when the point is no longer kept
+            act = ens.activation === :gelu_tanh ? NT._yanccnn_gelu_tanh : NT._yanccnn_elu
+            fgen(v) = sum(invoke(NT._yanccnn_members, Tuple{NT.YanccNNEnsemble,Any,AbstractMatrix{T}} where {T}, ens, act, reshape((v .- ens.xm) ./ ens.xsigma, :, 1)))
+            xl = [endswith(ens.xnames[i], "_log10") ? log10(x[i]) : x[i] for i in eachindex(x)]
+            ggen = ForwardDiff.gradient(fgen, xl) .* [endswith(ens.xnames[i], "_log10") ? 1 / (x[i] * log(10)) : 1.0 for i in eachindex(x)]
+            @test g ≈ ggen rtol = 1e-10
+            @test ForwardDiff.gradient(f, x, ForwardDiff.GradientConfig(f, x, ForwardDiff.Chunk{4}())) ≈ ggen rtol = 1e-10
+            gs = Vector{Vector{Float64}}(undef, 8)
+            Threads.@threads for it in 1:8
+                gs[it] = ForwardDiff.gradient(f, x .* (1 + 1e-3 * isodd(it)))
+            end
+            @test all(gs[it] == gs[it+2] for it in 1:6)
+            @test gs[2] ≈ ggen rtol = 1e-10
+            for it in 1:(NT._YANCCNN_JAC_CAPACITY+2)
+                ForwardDiff.derivative(a -> sum(NT.yanccnn_array(ens, x .* (1 + 1e-6 * it * a); warn_nn_train_bounds=false)), 1.0)
+            end
+            @test length(NT._YANCCNN_JAC_CACHE) == length(NT._YANCCNN_JAC_ORDER) == NT._YANCCNN_JAC_CAPACITY
+            @test ForwardDiff.gradient(f, x) ≈ ggen rtol = 1e-10
+            # a batch of points equals point by point, in plain and in dual numbers
+            xb = hcat(x, x .* (1 + 1e-3), x)
+            yb = NT.yanccnn_array(ens, xb)
+            @test size(yb) == (length(ens.ynames), 3, 20)
+            @test yb[:, 1, :] ≈ NT.yanccnn_array(ens, x) rtol = 1e-12
+            @test yb[:, 2, :] ≈ NT.yanccnn_array(ens, xb[:, 2]) rtol = 1e-12
+            fb(v) = sum(NT.yanccnn_array(ens, hcat(v, v .* (1 + 1e-3), v))[:, 2:3, :])
+            @test ForwardDiff.gradient(fb, x) ≈ ForwardDiff.gradient(v -> f(v .* (1 + 1e-3)) + f(v), x) rtol = 1e-9
             @test g[k] ≈ (f(xp) - f(xm)) / 2h rtol = 1e-5
         end
 
@@ -172,7 +200,7 @@ cp1d = dd.core_profiles.profiles_1d[];
         usol = NT.run_yanccnn(input_neo; uncertain=true, warn_nn_train_bounds=false)
         @test usol.ENERGY_FLUX_i isa NT.Measurements.Measurement
         @test NT.Measurements.value(usol.ENERGY_FLUX_i) ≈ sol.ENERGY_FLUX_i && NT.Measurements.uncertainty(usol.ENERGY_FLUX_i) >= 0
-        @test NT.run_yanccnn([input_neo, input_neo]; warn_nn_train_bounds=false)[2].ENERGY_FLUX_i == sol.ENERGY_FLUX_i
+        @test NT.run_yanccnn([input_neo, input_neo]; warn_nn_train_bounds=false)[2].ENERGY_FLUX_i ≈ sol.ENERGY_FLUX_i rtol = 1e-12
         flow = NT.run_yanccnn_flow(input_neo; warn_nn_train_bounds=false)
         uflow = NT.run_yanccnn_flow(input_neo; uncertain=true, warn_nn_train_bounds=false)
         @test isfinite(flow.jpar) && isfinite(flow.vpol_ion1) && NT.Measurements.value(uflow.jpar) ≈ flow.jpar

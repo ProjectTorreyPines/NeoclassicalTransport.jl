@@ -13,6 +13,7 @@
 # the normalisation of NEO's transport output (fluxes in electron gyro-Bohm units).
 
 import TOML
+import LinearAlgebra
 import Statistics
 import Measurements
 import SHA
@@ -203,42 +204,180 @@ end
 _yanccnn_gelu_tanh(x) = x / 2 * (1 + tanh(sqrt(2 / pi) * (x + 0.044715 * x^3)))
 _yanccnn_elu(x) = x > 0 ? x : expm1(x)
 
-function _yanccnn_member(layers::Vector{YanccNNDense}, act::F, nblocks::Integer, x::AbstractVector) where {F}
-    h = act.(layers[1].W * x .+ layers[1].b)
+# One member for a batch of points (columns of `x`), in place: `y` receives the (normalised)
+# outputs; `ws` holds three work matrices (hidden width, points). Every weight matrix is
+# read once for the whole batch. Generic in the element type, so dual numbers can be carried
+# through.
+function _yanccnn_member!(y::AbstractMatrix, ws::NTuple{3,<:AbstractMatrix}, layers::Vector{YanccNNDense}, act::F, nblocks::Integer, x::AbstractMatrix) where {F}
+    h, z, t = ws
+    LinearAlgebra.mul!(h, layers[1].W, x)
+    h .= act.(h .+ layers[1].b)
     k = 1
     for _ in 1:nblocks
-        z = h
+        src = h
         for j in 1:3
-            z = act.(layers[k+j].W * z .+ layers[k+j].b)
+            dst = isodd(j) ? z : t
+            LinearAlgebra.mul!(dst, layers[k+j].W, src)
+            dst .= act.(dst .+ layers[k+j].b)
+            src = dst
         end
-        z = layers[k+4].W * z .+ layers[k+4].b
-        h = act.(z .+ h)
+        LinearAlgebra.mul!(t, layers[k+4].W, z)
+        h .= act.(t .+ layers[k+4].b .+ h)
         k += 4
     end
-    return layers[end].W * h .+ layers[end].b
+    LinearAlgebra.mul!(y, layers[end].W, h)
+    y .+= layers[end].b
+    return y
+end
+
+# Value and derivative of the activations
+function _yanccnn_gelu_tanh_d(x)
+    c = sqrt(2 / pi)
+    t = tanh(c * (x + 0.044715 * x^3))
+    return x / 2 * (1 + t), (1 + t) / 2 + x / 2 * (1 - t^2) * c * (1 + 3 * 0.044715 * x^2)
+end
+_yanccnn_elu_d(x) = x > 0 ? (x, one(x)) : (expm1(x), exp(x))
+
+# One member for a batch of points with the Jacobian of its (normalised) outputs with respect
+# to its inputs, in place. `ws` = (h, z, t, d) work matrices (width, points) and (J, Jz, Jt)
+# work arrays (width, inputs, points); `Jy` is (outputs, inputs, points).
+function _yanccnn_member_jacobian!(y::Matrix{Float64}, Jy::AbstractArray{Float64,3}, ws, layers::Vector{YanccNNDense}, actd::F, nblocks::Integer, x::Matrix{Float64}) where {F}
+    h, z, t, d, J, Jz, Jt = ws
+    width, nin, np = size(J)
+    flat(A) = reshape(A, size(A, 1), nin * np)
+    d3 = reshape(d, width, 1, np)
+    function activate!(dst, src, b)
+        @inbounds for s in axes(dst, 2), i in axes(dst, 1)
+            dst[i, s], d[i, s] = actd(src[i, s] + b[i])
+        end
+    end
+    LinearAlgebra.mul!(h, layers[1].W, x)
+    activate!(h, h, layers[1].b)
+    J .= d3 .* layers[1].W
+    k = 1
+    for _ in 1:nblocks
+        src, Jsrc = h, J
+        for j in 1:3
+            dst, Jdst = isodd(j) ? (z, Jz) : (t, Jt)
+            LinearAlgebra.mul!(dst, layers[k+j].W, src)
+            LinearAlgebra.mul!(flat(Jdst), layers[k+j].W, flat(Jsrc))
+            activate!(dst, dst, layers[k+j].b)
+            Jdst .*= d3
+            src, Jsrc = dst, Jdst
+        end
+        LinearAlgebra.mul!(t, layers[k+4].W, z)
+        LinearAlgebra.mul!(flat(Jt), layers[k+4].W, flat(Jz))
+        t .+= h
+        activate!(h, t, layers[k+4].b)
+        J .= d3 .* (Jt .+ J)
+        k += 4
+    end
+    LinearAlgebra.mul!(y, layers[end].W, h)
+    y .+= layers[end].b
+    LinearAlgebra.mul!(flat(Jy), layers[end].W, flat(J))
+    return y, Jy
 end
 
 """
-    yanccnn_array(ens::YanccNNEnsemble, x::AbstractVector; warn_nn_train_bounds=true)
+    yanccnn_array(ens::YanccNNEnsemble, x::AbstractVector; warn_nn_train_bounds=false)
+    yanccnn_array(ens::YanccNNEnsemble, x::AbstractMatrix; warn_nn_train_bounds=false)
 
-Outputs of every member at one point: a `(n outputs, n members)` matrix. `x` holds the
-inputs in the order of `ens.xnames`, as plain values (the `log10` of the `_log10` inputs is
-taken here).
+Outputs of every member: a `(n outputs, n members)` matrix for one point, or
+`(n outputs, n points, n members)` for a batch of points given as the columns of `x`
+(faster than point by point). `x` holds the inputs in the order of `ens.xnames`, as plain
+values (the `log10` of the `_log10` inputs is taken here).
 """
-function yanccnn_array(ens::YanccNNEnsemble, x::AbstractVector{T}; warn_nn_train_bounds::Bool=true) where {T<:Real}
-    length(x) == length(ens.xnames) || error("Yancc-NN $(ens.name): $(length(x)) inputs given, $(length(ens.xnames)) expected")
-    xx = [endswith(ens.xnames[i], "_log10") ? log10(x[i]) : float(x[i]) for i in eachindex(x)]
-    for i in eachindex(xx)
-        isfinite(xx[i]) || error("Yancc-NN $(ens.name): $(ens.xnames[i]) = $(x[i]) is not allowed")
-        if warn_nn_train_bounds && !(ens.xmin[i] <= xx[i] <= ens.xmax[i])
-            @warn "Yancc-NN $(ens.name) extrapolation: $(ens.xnames[i]) = $(ForwardDiff.value(xx[i])) is outside the training range [$(ens.xmin[i]), $(ens.xmax[i])]"
+function yanccnn_array(ens::YanccNNEnsemble, x::AbstractMatrix{T}; warn_nn_train_bounds::Bool=false) where {T<:Real}
+    size(x, 1) == length(ens.xnames) || error("Yancc-NN $(ens.name): $(size(x, 1)) inputs given, $(length(ens.xnames)) expected")
+    xn = [endswith(ens.xnames[i], "_log10") ? log10(x[i, s]) : float(x[i, s]) for i in axes(x, 1), s in axes(x, 2)]
+    for s in axes(xn, 2), i in axes(xn, 1)
+        isfinite(xn[i, s]) || error("Yancc-NN $(ens.name): $(ens.xnames[i]) = $(x[i, s]) is not allowed")
+        if warn_nn_train_bounds && !(ens.xmin[i] <= xn[i, s] <= ens.xmax[i])
+            @warn "Yancc-NN $(ens.name) extrapolation: $(ens.xnames[i]) = $(ForwardDiff.value(xn[i, s])) is outside the training range [$(ens.xmin[i]), $(ens.xmax[i])]"
         end
     end
-    xn = (xx .- ens.xm) ./ ens.xsigma
+    xn .= (xn .- ens.xm) ./ ens.xsigma
     act = ens.activation === :gelu_tanh ? _yanccnn_gelu_tanh : _yanccnn_elu
-    y = Matrix{eltype(xn)}(undef, length(ens.ynames), length(ens.members))
+    return _yanccnn_members(ens, act, xn)
+end
+
+function yanccnn_array(ens::YanccNNEnsemble, x::AbstractVector{T}; warn_nn_train_bounds::Bool=false) where {T<:Real}
+    return dropdims(yanccnn_array(ens, reshape(x, :, 1); warn_nn_train_bounds); dims=2)
+end
+
+function _yanccnn_members(ens::YanccNNEnsemble, act::F, xn::AbstractMatrix{T}) where {F,T}
+    width, np = length(ens.members[1][1].b), size(xn, 2)
+    ws = (Matrix{T}(undef, width, np), Matrix{T}(undef, width, np), Matrix{T}(undef, width, np))
+    y = Array{T,3}(undef, length(ens.ynames), np, length(ens.members))
     for (k, layers) in enumerate(ens.members)
-        y[:, k] = _yanccnn_member(layers, act, ens.nblocks, xn) .* ens.ysigma .+ ens.ym
+        yk = view(y, :, :, k)
+        _yanccnn_member!(yk, ws, layers, act, ens.nblocks, xn)
+        yk .= yk .* ens.ysigma .+ ens.ym
+    end
+    return y
+end
+
+# Dual-number inputs. The outputs and their Jacobian with respect to the inputs are computed
+# in plain numbers, and the partials of the inputs are carried through that Jacobian. Forward
+# mode in chunks evaluates the same point once per chunk with different partials, so the
+# result of the last points is kept (exact match of the model and of every input value).
+const _YANCCNN_JAC_CAPACITY = 256
+const _YANCCNN_JAC_CACHE = Dict{Tuple{String,Vector{Float64}},Tuple{Matrix{Float64},Array{Float64,3}}}()
+const _YANCCNN_JAC_ORDER = Tuple{String,Vector{Float64}}[]
+const _YANCCNN_JAC_LOCK = ReentrantLock()
+
+# For each point (column of `xv`): outputs (outputs, members) and Jacobian (outputs, inputs, members)
+function _yanccnn_members_jacobian(ens::YanccNNEnsemble, xv::Matrix{Float64})
+    np = size(xv, 2)
+    keys_ = [(ens.name, xv[:, s]) for s in 1:np]
+    res = lock(() -> Any[get(_YANCCNN_JAC_CACHE, key, nothing) for key in keys_], _YANCCNN_JAC_LOCK)
+    todo = [s for s in 1:np if res[s] === nothing && findfirst(==(keys_[s]), keys_) == s]
+    if !isempty(todo)
+        actd = ens.activation === :gelu_tanh ? _yanccnn_gelu_tanh_d : _yanccnn_elu_d
+        width, nin, nout, nmem, nt = length(ens.members[1][1].b), size(xv, 1), length(ens.ynames), length(ens.members), length(todo)
+        ws = (ntuple(_ -> Matrix{Float64}(undef, width, nt), 4)..., ntuple(_ -> Array{Float64,3}(undef, width, nin, nt), 3)...)
+        x = xv[:, todo]
+        yk = Matrix{Float64}(undef, nout, nt)
+        Jk = Array{Float64,3}(undef, nout, nin, nt)
+        Y = [Matrix{Float64}(undef, nout, nmem) for _ in todo]
+        J = [Array{Float64,3}(undef, nout, nin, nmem) for _ in todo]
+        for (k, layers) in enumerate(ens.members)
+            _yanccnn_member_jacobian!(yk, Jk, ws, layers, actd, ens.nblocks, x)
+            for (q, _) in enumerate(todo)
+                Y[q][:, k] .= view(yk, :, q) .* ens.ysigma .+ ens.ym
+                J[q][:, :, k] .= view(Jk, :, :, q) .* ens.ysigma
+            end
+        end
+        lock(_YANCCNN_JAC_LOCK) do
+            for (q, s) in enumerate(todo)
+                res[s] = (Y[q], J[q])
+                haskey(_YANCCNN_JAC_CACHE, keys_[s]) && continue
+                if length(_YANCCNN_JAC_ORDER) >= _YANCCNN_JAC_CAPACITY
+                    delete!(_YANCCNN_JAC_CACHE, popfirst!(_YANCCNN_JAC_ORDER))
+                end
+                _YANCCNN_JAC_CACHE[keys_[s]] = (Y[q], J[q])
+                push!(_YANCCNN_JAC_ORDER, keys_[s])
+            end
+        end
+    end
+    for s in 1:np      # repeated points within the batch
+        res[s] === nothing && (res[s] = res[findfirst(==(keys_[s]), keys_)])
+    end
+    return res
+end
+
+function _yanccnn_members(ens::YanccNNEnsemble, act::F, xn::AbstractMatrix{ForwardDiff.Dual{Tg,V,N}}) where {F,Tg,V<:AbstractFloat,N}
+    res = _yanccnn_members_jacobian(ens, Float64[ForwardDiff.value(v) for v in xn])
+    y = Array{ForwardDiff.Dual{Tg,V,N},3}(undef, length(ens.ynames), size(xn, 2), length(ens.members))
+    for s in axes(xn, 2)
+        Y, J = res[s]::Tuple{Matrix{Float64},Array{Float64,3}}
+        for k in axes(Y, 2), i in axes(Y, 1)
+            p = zero(ForwardDiff.partials(xn[1, s]))
+            for j in axes(xn, 1)
+                p += V(J[i, j, k]) * ForwardDiff.partials(xn[j, s])
+            end
+            y[i, s, k] = ForwardDiff.Dual{Tg}(V(Y[i, k]), p)
+        end
     end
     return y
 end
@@ -315,18 +454,19 @@ function _yanccnn_stat(v::AbstractVector{T}, uncertain::Bool) where {T<:Real}
     return Measurements.measurement(m, length(v) > 1 ? Statistics.std(v; mean=m) : zero(m))
 end
 
-function _yanccnn_outputs(ens::YanccNNEnsemble, input_neo::InputNEO, expected, warn_nn_train_bounds::Bool)
+# Outputs of every member for a batch of InputNEO: name => (points, members) matrix
+function _yanccnn_outputs(ens::YanccNNEnsemble, input_neos::AbstractVector{<:InputNEO}, expected, warn_nn_train_bounds::Bool)
     Set(ens.ynames) == Set(expected) || error("Yancc-NN: model $(ens.name) has the outputs $(ens.ynames), not $(expected)")
-    y = yanccnn_array(ens, _yanccnn_x(ens, input_neo); warn_nn_train_bounds)
-    return Dict(name => view(y, k, :) for (k, name) in enumerate(ens.ynames))
+    y = yanccnn_array(ens, reduce(hcat, [_yanccnn_x(ens, input_neo) for input_neo in input_neos]); warn_nn_train_bounds)
+    return Dict(name => view(y, k, :, :) for (k, name) in enumerate(ens.ynames))
 end
 
 const _YANCCNN_FLUX = ["$(f)flux_tgyro_$(s)" for f in ("p", "e", "m") for s in ("ion1", "ion2", "elec")]
 const _YANCCNN_FLOW = ["jpar", "vpol_elec", "vpol_ion1", "vpol_ion2"]
 
 """
-    run_yanccnn(input_neo::InputNEO; model="yanccnn_mastu+nstx_flux", uncertain=false, warn_nn_train_bounds=true)
-    run_yanccnn(input_neos::Vector{<:InputNEO}; ...)
+    run_yanccnn(input_neo::InputNEO; model="yanccnn_mastu+nstx_flux", uncertain=false, warn_nn_train_bounds=false)
+    run_yanccnn(input_neos::Vector{<:InputNEO}; ...)    # one batched evaluation, faster than one call per InputNEO
 
 Neoclassical fluxes from the Yancc-NN surrogate, as a `GACODE.FluxSolution` in gyro-Bohm
 units (ensemble mean). `PARTICLE_FLUX_i` has two entries, the bulk ion and the lumped
@@ -337,19 +477,22 @@ deviation over the members (for the summed ion channels, of the sum in each memb
 
 `model`: see [`yanccnn_models`](@ref). The shipped models were trained on MAST-U and NSTX
 core plasmas (r/a from 0.1 to 0.9, deuterium with carbon) with measured sonic rotation;
-`warn_nn_train_bounds` warns when an input is outside the range of the training set. The
+`warn_nn_train_bounds=true` warns when an input is outside the range of the training set. The
 signs of the outputs are those of the training devices' field and current directions,
 which are not inputs.
 """
-function run_yanccnn(input_neo::InputNEO; model::AbstractString="yanccnn_mastu+nstx_flux", uncertain::Bool=false, warn_nn_train_bounds::Bool=true)
-    y = _yanccnn_outputs(load_yanccnn_once(model), input_neo, _YANCCNN_FLUX, warn_nn_train_bounds)
-    stat(v) = _yanccnn_stat(v, uncertain)
-    Qe = stat(y["eflux_tgyro_elec"])
-    return GACODE.FluxSolution{typeof(Qe)}(Qe, stat(y["eflux_tgyro_ion1"] .+ y["eflux_tgyro_ion2"]), stat(y["pflux_tgyro_elec"]),
-        [stat(y["pflux_tgyro_ion1"]), stat(y["pflux_tgyro_ion2"])], stat(y["mflux_tgyro_ion1"] .+ y["mflux_tgyro_ion2"]))
+function run_yanccnn(input_neos::AbstractVector{<:InputNEO}; model::AbstractString="yanccnn_mastu+nstx_flux", uncertain::Bool=false, warn_nn_train_bounds::Bool=false)
+    y = _yanccnn_outputs(load_yanccnn_once(model), input_neos, _YANCCNN_FLUX, warn_nn_train_bounds)
+    stat(name, s) = _yanccnn_stat(view(y[name], s, :), uncertain)
+    stat(name1, name2, s) = _yanccnn_stat(view(y[name1], s, :) .+ view(y[name2], s, :), uncertain)
+    return map(eachindex(input_neos)) do s
+        Qe = stat("eflux_tgyro_elec", s)
+        GACODE.FluxSolution{typeof(Qe)}(Qe, stat("eflux_tgyro_ion1", "eflux_tgyro_ion2", s), stat("pflux_tgyro_elec", s),
+            [stat("pflux_tgyro_ion1", s), stat("pflux_tgyro_ion2", s)], stat("mflux_tgyro_ion1", "mflux_tgyro_ion2", s))
+    end
 end
 
-run_yanccnn(input_neos::AbstractVector{<:InputNEO}; kw...) = [run_yanccnn(input_neo; kw...) for input_neo in input_neos]
+run_yanccnn(input_neo::InputNEO; kw...) = only(run_yanccnn([input_neo]; kw...))
 
 """
     YanccNNFlowSolution
@@ -368,17 +511,17 @@ struct YanccNNFlowSolution{T<:Real}
 end
 
 """
-    run_yanccnn_flow(input_neo::InputNEO; model="yanccnn_mastu+nstx_flow", uncertain=false, warn_nn_train_bounds=true)
+    run_yanccnn_flow(input_neo::InputNEO; model="yanccnn_mastu+nstx_flow", uncertain=false, warn_nn_train_bounds=false)
     run_yanccnn_flow(input_neos::Vector{<:InputNEO}; ...)
 
 Poloidal flows and parallel current from the Yancc-NN flow surrogate, as a
 [`YanccNNFlowSolution`](@ref) (ensemble mean, or mean ± standard deviation over the members
 with `uncertain=true`). Options as in [`run_yanccnn`](@ref).
 """
-function run_yanccnn_flow(input_neo::InputNEO; model::AbstractString="yanccnn_mastu+nstx_flow", uncertain::Bool=false, warn_nn_train_bounds::Bool=true)
-    y = _yanccnn_outputs(load_yanccnn_once(model), input_neo, _YANCCNN_FLOW, warn_nn_train_bounds)
-    stat(v) = _yanccnn_stat(v, uncertain)
-    return YanccNNFlowSolution(stat(y["vpol_ion1"]), stat(y["vpol_ion2"]), stat(y["vpol_elec"]), stat(y["jpar"]))
+function run_yanccnn_flow(input_neos::AbstractVector{<:InputNEO}; model::AbstractString="yanccnn_mastu+nstx_flow", uncertain::Bool=false, warn_nn_train_bounds::Bool=false)
+    y = _yanccnn_outputs(load_yanccnn_once(model), input_neos, _YANCCNN_FLOW, warn_nn_train_bounds)
+    stat(name, s) = _yanccnn_stat(view(y[name], s, :), uncertain)
+    return [YanccNNFlowSolution(stat("vpol_ion1", s), stat("vpol_ion2", s), stat("vpol_elec", s), stat("jpar", s)) for s in eachindex(input_neos)]
 end
 
-run_yanccnn_flow(input_neos::AbstractVector{<:InputNEO}; kw...) = [run_yanccnn_flow(input_neo; kw...) for input_neo in input_neos]
+run_yanccnn_flow(input_neo::InputNEO; kw...) = only(run_yanccnn_flow([input_neo]; kw...))
