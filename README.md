@@ -54,12 +54,19 @@ sol  = NeoclassicalTransport.run_yanccnn(input_neo; uncertain=true)   # Measurem
 ```
 
 The models are ensembles of 20 networks trained on drift kinetic solutions with sonic toroidal
-rotation for MAST-U and NSTX core plasmas (r/a from 0.1 to 0.9, deuterium with carbon, 65 pitch,
-41 poloidal and 10 energy points). The plasma is reduced to a bulk ion, one lumped impurity and
-electrons (`yanccnn_inputs`), and `warn_nn_train_bounds=true` warns when an input is outside the range of the
-training set. On data held out of the training, the median relative error of the ensemble mean is
-0.2 to 0.4 % for the fluxes and below 0.1 % for the flows. The forward pass is differentiable with
-ForwardDiff. `yanccnn_models()` lists the models.
+rotation for core plasmas (r/a from 0.1 to 0.9, deuterium with carbon, 41 poloidal and 10 energy points):
+
+| `model` | training set | pitch points | median / 90th percentile error on held-out data |
+|---|---|---|---|
+| `yanccnn_mastu+nstx_flux` (default of `run_yanccnn`) | MAST-U and NSTX | 65 | 0.2–0.4 % / 0.9–2.3 % |
+| `yanccnn_mastu+nstx_flow` (default of `run_yanccnn_flow`) | MAST-U and NSTX | 65 | below 0.1 % / 0.3 % |
+| `yanccnn_d3d_flux` | DIII-D | 129 | 0.06–0.14 % / 0.4–0.9 % |
+| `yanccnn_d3d_flow` | DIII-D | 129 | 0.02–0.06 % / 0.1–0.3 % |
+
+The errors are those of the ensemble mean relative to the solver, over the output channels. The plasma
+is reduced to a bulk ion, one lumped impurity and electrons (`yanccnn_inputs`), and
+`warn_nn_train_bounds=true` warns when an input is outside the range of the training set. The forward
+pass is differentiable with ForwardDiff. `yanccnn_models()` lists the models.
 
 The weights (`models/*.bin`) are stored with Git LFS. In a git checkout `git lfs pull` fetches them;
 in a package installation they are downloaded on first use.

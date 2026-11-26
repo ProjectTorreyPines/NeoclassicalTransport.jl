@@ -137,7 +137,18 @@ cp1d = dd.core_profiles.profiles_1d[];
     end
     @testset "yancc_nn.jl" begin
         NT = NeoclassicalTransport
-        @test NT.yanccnn_models() == ["yanccnn_mastu+nstx_flow", "yanccnn_mastu+nstx_flux"]
+        @test NT.yanccnn_models() == ["yanccnn_d3d_flow", "yanccnn_d3d_flux", "yanccnn_mastu+nstx_flow", "yanccnn_mastu+nstx_flux"]
+        # the DIII-D models (24 inputs: one impurity temperature less): predictions of the training code on hold-out points
+        for group in ("flux", "flow")
+            ens = NT.load_yanccnn_once("yanccnn_d3d_$group")
+            @test length(ens.members) == 20 && length(ens.xnames) == 24 && !("TEMP_2" in ens.xnames)
+            ref = TOML.parsefile(joinpath(@__DIR__, "yanccnn_reference_d3d_$group.toml"))
+            for (x, y) in zip(ref["x"], ref["y"])
+                out = NT.yanccnn_array(ens, Float64.(x))
+                mean_out = vec(sum(out; dims=2)) ./ size(out, 2)
+                @test all(abs.(mean_out .- y) .<= 1e-3 .* abs.(y) .+ 1e-5 .* ens.ysigma)
+            end
+        end
         for group in ("flux", "flow")
             ens = NT.load_yanccnn_once("yanccnn_mastu+nstx_$group")
             @test length(ens.members) == 20
@@ -205,6 +216,9 @@ cp1d = dd.core_profiles.profiles_1d[];
         uflow = NT.run_yanccnn_flow(input_neo; uncertain=true, warn_nn_train_bounds=false)
         @test isfinite(flow.jpar) && isfinite(flow.vpol_ion1) && NT.Measurements.value(uflow.jpar) ≈ flow.jpar
         @test_throws ErrorException NT.run_yanccnn(input_neo; model="yanccnn_mastu+nstx_flow", warn_nn_train_bounds=false)
+        sol_d3d = NT.run_yanccnn(input_neo; model="yanccnn_d3d_flux")
+        @test isfinite(sol_d3d.ENERGY_FLUX_i) && sol_d3d.ENERGY_FLUX_i != sol.ENERGY_FLUX_i
+        @test isfinite(NT.run_yanccnn_flow(input_neo; model="yanccnn_d3d_flow").jpar)
 
         # weights stored with Git LFS: pointers are recognised, ordinary files are used as they are
         mktempdir() do dir

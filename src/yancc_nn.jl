@@ -476,7 +476,8 @@ With `uncertain=true` the values are `Measurements.Measurement`s: ensemble mean 
 deviation over the members (for the summed ion channels, of the sum in each member).
 
 `model`: see [`yanccnn_models`](@ref). The shipped models were trained on MAST-U and NSTX
-core plasmas (r/a from 0.1 to 0.9, deuterium with carbon) with measured sonic rotation;
+(`yanccnn_mastu+nstx_*`, the default) or DIII-D (`yanccnn_d3d_*`) core plasmas (r/a from 0.1 to 0.9,
+deuterium with carbon) with measured sonic rotation;
 `warn_nn_train_bounds=true` warns when an input is outside the range of the training set. The
 signs of the outputs are those of the training devices' field and current directions,
 which are not inputs.
